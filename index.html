@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>巧巧酥的戰鬥陀螺 - BEY-COMMANDER X</title>
+    <title>BEY-COMMANDER X - 多人管理系統</title>
     <!-- 導入 Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 導入 React & Babel -->
@@ -17,6 +17,8 @@
         body { font-family: 'Noto Sans TC', sans-serif; overflow-x: hidden; }
         .bey-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .bey-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px -5px rgba(220, 38, 38, 0.3); }
+        .login-btn { transition: all 0.3s ease; }
+        .login-btn:hover { transform: scale(1.05); }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #020617; }
         ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
@@ -35,7 +37,7 @@
                 { tier: "T0", items: "H FB LR R", color: "bg-red-600" },
                 { tier: "T1", items: "J LO K L UN B W E", color: "bg-orange-600" },
                 { tier: "T2", items: "P D FF I UF U T TK TP O OP Y HN", color: "bg-yellow-600 text-black" },
-                { tier: "T3", items: "F GR HT GN A RA LF Q N G V GU Z WW", color: "bg-green-600" },
+                { tier: "T3", items: "F GR HT GN A RA LF Q n G V GU Z WW", color: "bg-green-600" },
                 { tier: "T4", items: "P WB BS S C GF MN TR", color: "bg-blue-600" },
                 { tier: "T5", items: "M DB GB", color: "bg-slate-600" },
             ],
@@ -49,9 +51,7 @@
             ]
         };
 
-        // --- 完整恢復的資料庫 ---
         const INITIAL_DATABASE = [
-            // BX 系列
             { id: "BX-00", name: "蒼穹龍神", blade: "Dranzer Spiral", ratchet: "3-80", bit: "T", series: "BX", type: "Balance" },
             { id: "BX-01", name: "蒼龍騎士", blade: "Dran Sword", ratchet: "3-60", bit: "F", series: "BX", type: "Attack" },
             { id: "BX-02", name: "地獄鐮刀", blade: "Hells Scythe", ratchet: "4-60", bit: "T", series: "BX", type: "Balance" },
@@ -61,67 +61,93 @@
             { id: "BX-10", name: "騎士長槍", blade: "Knight Lance", ratchet: "4-80", bit: "HN", series: "BX", type: "Defense" },
             { id: "BX-14", name: "鯊魚末日 (V2)", blade: "Shark Edge", ratchet: "3-60", bit: "LF", series: "BX", type: "Attack" },
             { id: "BX-15", name: "獅子之爪", blade: "Leon Claw", ratchet: "5-60", bit: "P", series: "BX", type: "Balance" },
-            { id: "BX-16", name: "毒蛇狂怒", blade: "Viper Tail", ratchet: "5-80", bit: "O", series: "BX", type: "Stamina" },
-            { id: "BX-19", name: "犀牛狂角", blade: "Rhino Horn", ratchet: "3-80", bit: "S", series: "BX", type: "Defense" },
-            { id: "BX-20", name: "龍之末日", blade: "Dran Dagger", ratchet: "4-60", bit: "R", series: "BX", type: "Attack" },
-            { id: "BX-21", name: "地獄鏈條", blade: "Hells Chain", ratchet: "5-60", bit: "HT", series: "BX", type: "Balance" },
             { id: "BX-23", name: "鳳凰羽翼", blade: "Phoenix Wing", ratchet: "9-60", bit: "GF", series: "BX", type: "Attack" },
-            { id: "BX-24", name: "閃亮神錘", blade: "Wyvern Gale", ratchet: "5-80", bit: "GB", series: "BX", type: "Stamina" },
-            { id: "BX-26", name: "獨角獸刺擊", blade: "Unicorn Sting", ratchet: "5-60", bit: "GP", series: "BX", type: "Balance" },
-            { id: "BX-27", name: "斯芬克斯之影", blade: "Sphinx Cowl", ratchet: "9-80", bit: "GN", series: "BX", type: "Defense" },
             { id: "BX-31", name: "暴龍破壞", blade: "Tyranno Beat", ratchet: "4-70", bit: "Q", series: "BX", type: "Attack" },
-            { id: "BX-33", name: "漆黑之殼", blade: "Black Shell", ratchet: "4-60", bit: "DOT", series: "BX", type: "Defense" },
             { id: "BX-34", name: "鈷藍龍騎", blade: "Cobalt Dragoon", ratchet: "2-60", bit: "L", series: "BX", type: "Attack", rotation: "Left" },
-            { id: "BX-35", name: "閃光虎", blade: "Slayer Tiger", ratchet: "3-60", bit: "P", series: "BX", type: "Balance" },
-            { id: "BX-36", name: "鯨魚波浪", blade: "Whale Wave", ratchet: "5-80", bit: "E", series: "BX", type: "Attack" },
-            { id: "BX-38", name: "緋紅之翼", blade: "Crimson Wing", ratchet: "1-80", bit: "B", series: "BX", type: "Stamina" },
-
-            // CX 系列
-            { id: "CX-01", name: "蒼龍騎士 (白金)", blade: "Dran Sword", ratchet: "3-60", bit: "F", series: "CX", type: "Attack" },
-            { id: "CX-02", name: "閃耀聖龍", blade: "Shining Dragon", ratchet: "3-60", bit: "LF", series: "CX", type: "Attack" },
-            { id: "CX-06", name: "騎士護盾 (反擊裝)", blade: "Knight Shield", ratchet: "3-60", bit: "LF", series: "CX", type: "Balance" },
-            { id: "CX-07", name: "巫師箭矢 (高位裝)", blade: "Wizard Arrow", ratchet: "4-70", bit: "T", series: "CX", type: "Stamina" },
-            { id: "CX-08", name: "地獄鐮刀 (持久裝)", blade: "Hells Scythe", ratchet: "3-80", bit: "B", series: "CX", type: "Balance" },
-            { id: "CX-09", name: "鯊魚末日 (震盪裝)", blade: "Shark Edge", ratchet: "1-60", bit: "Q", series: "CX", type: "Attack" },
-            { id: "CX-10", name: "毒蛇狂怒 (穩定裝)", blade: "Viper Tail", ratchet: "5-70", bit: "O", series: "CX", type: "Stamina" },
-            { id: "CX-12", name: "犀牛狂角 (防禦裝)", blade: "Rhino Horn", ratchet: "3-70", bit: "HN", series: "CX", type: "Defense" },
-            { id: "CX-13", name: "獅子之爪 (重裝)", blade: "Leon Claw", ratchet: "9-60", bit: "W", series: "CX", type: "Defense" },
             { id: "CX-14", name: "騎士堡壘", blade: "Knight Fortress", ratchet: "5-80", bit: "DOT", series: "CX", type: "Defense" },
         ];
 
-        // 圖示組件
+        const USERS = ["巧巧酥", "黃美", "小剛", "小駿"];
+
         const Icon = ({ name, size = 24, className = "" }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
             return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
         };
 
         const App = () => {
-            const [db, setDb] = useState(() => {
-                const saved = localStorage.getItem('bey_db');
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-                    // 智慧修復：如果發現資料筆數異常（例如之前那次縮減版），則合併預設完整資料
-                    if (parsed.length < 10) return INITIAL_DATABASE;
-                    return parsed;
-                }
-                return INITIAL_DATABASE;
-            });
-            const [ownedIds, setOwnedIds] = useState(() => {
-                const saved = localStorage.getItem('bey_owned');
-                return saved ? new Set(JSON.parse(saved)) : new Set();
-            });
+            const [currentUser, setCurrentUser] = useState(localStorage.getItem('bey_current_user') || null);
+            const [db, setDb] = useState([]);
+            const [ownedIds, setOwnedIds] = useState(new Set());
             const [activeTab, setActiveTab] = useState('catalog');
             const [searchTerm, setSearchTerm] = useState('');
             const [partsFilter, setPartsFilter] = useState('blade');
             const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingBey, setEditingBey] = useState(null);
             const [formData, setFormData] = useState({ id: '', name: '', blade: '', ratchet: '', bit: '', series: 'BX', type: 'Attack' });
 
+            // 當切換使用者時，讀取該使用者的資料
             useEffect(() => {
-                localStorage.setItem('bey_db', JSON.stringify(db));
-                localStorage.setItem('bey_owned', JSON.stringify(Array.from(ownedIds)));
-            }, [db, ownedIds]);
+                if (currentUser) {
+                    localStorage.setItem('bey_current_user', currentUser);
+                    
+                    const savedDb = localStorage.getItem(`bey_db_${currentUser}`);
+                    if (savedDb) {
+                        setDb(JSON.parse(savedDb));
+                    } else {
+                        setDb(INITIAL_DATABASE);
+                    }
+
+                    const savedOwned = localStorage.getItem(`bey_owned_${currentUser}`);
+                    setOwnedIds(savedOwned ? new Set(JSON.parse(savedOwned)) : new Set());
+                }
+            }, [currentUser]);
+
+            // 持久化儲存目前的資料到當前帳號
+            useEffect(() => {
+                if (currentUser && db.length > 0) {
+                    localStorage.setItem(`bey_db_${currentUser}`, JSON.stringify(db));
+                    localStorage.setItem(`bey_owned_${currentUser}`, JSON.stringify(Array.from(ownedIds)));
+                }
+            }, [db, ownedIds, currentUser]);
 
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+            // 登出
+            const handleLogout = () => {
+                setCurrentUser(null);
+                localStorage.removeItem('bey_current_user');
+            };
+
+            const handleOpenModal = (bey = null) => {
+                if (bey) {
+                    setEditingBey(bey.id);
+                    setFormData(bey);
+                } else {
+                    setEditingBey(null);
+                    setFormData({ id: '', name: '', blade: '', ratchet: '', bit: '', series: 'BX', type: 'Attack' });
+                }
+                setIsModalOpen(true);
+            };
+
+            const handleSave = () => {
+                if (!formData.id || !formData.name) return;
+                if (editingBey) {
+                    setDb(db.map(b => b.id === editingBey ? formData : b));
+                } else {
+                    setDb([...db, formData]);
+                }
+                setIsModalOpen(false);
+            };
+
+            const handleDelete = (id) => {
+                if (confirm('確定要刪除這款陀螺嗎？')) {
+                    setDb(db.filter(b => b.id !== id));
+                    const newOwned = new Set(ownedIds);
+                    newOwned.delete(id);
+                    setOwnedIds(newOwned);
+                    setIsModalOpen(false);
+                }
+            };
 
             const getPartTierInfo = (partName, category) => {
                 if (category === 'blade') return null;
@@ -140,6 +166,15 @@
                 setOwnedIds(newOwned);
             };
 
+            const filteredDb = useMemo(() => {
+                const term = searchTerm.toLowerCase();
+                return db.filter(b => 
+                    b.name.toLowerCase().includes(term) || 
+                    b.id.toLowerCase().includes(term) || 
+                    b.blade.toLowerCase().includes(term)
+                );
+            }, [db, searchTerm]);
+
             const ownedParts = useMemo(() => {
                 const parts = { blades: new Set(), ratchets: new Set(), bits: new Set() };
                 db.forEach(bey => {
@@ -156,52 +191,73 @@
                 };
             }, [ownedIds, db]);
 
-            const handleSave = () => {
-                if (!formData.id || !formData.name) return;
-                setDb([...db, formData]);
-                setIsModalOpen(false);
-            };
+            // --- 登入畫面 ---
+            if (!currentUser) {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-6">
+                        <div className="mb-12 text-center">
+                            <h1 className="text-6xl font-black italic text-transparent bg-clip-text bg-gradient-to-br from-red-600 via-white to-blue-600 uppercase mb-4 tracking-tighter">
+                                BEY-COMMANDER X
+                            </h1>
+                            <p className="text-slate-500 font-bold tracking-[0.3em] uppercase">請選擇使用者登入</p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl">
+                            {USERS.map(user => (
+                                <button
+                                    key={user}
+                                    onClick={() => setCurrentUser(user)}
+                                    className="login-btn p-8 bg-slate-900 border-2 border-slate-800 rounded-lg text-3xl font-black hover:border-red-600 hover:bg-slate-800 group relative overflow-hidden"
+                                >
+                                    <div className="absolute top-0 left-0 w-1 h-full bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                    <span className="group-hover:text-red-500 transition-colors">{user}</span>
+                                    <div className="mt-2 text-xs text-slate-600 uppercase tracking-widest font-bold">Commander Entry</div>
+                                </button>
+                            ))}
+                        </div>
+                        <footer className="mt-20 text-slate-800 text-[10px] font-black uppercase tracking-widest">
+                            Authorized Access Only // System 2.0
+                        </footer>
+                    </div>
+                );
+            }
 
-            const getTypeColor = (type) => {
-                switch (type) {
-                    case 'Attack': return 'border-red-600 text-red-500';
-                    case 'Defense': return 'border-blue-600 text-blue-500';
-                    case 'Stamina': return 'border-yellow-600 text-yellow-500';
-                    case 'Balance': return 'border-green-600 text-green-500';
-                    default: return 'border-slate-600 text-slate-500';
-                }
-            };
-
+            // --- 主介面 ---
             return (
                 <div className="min-h-screen pb-24">
-                    {/* Header */}
                     <header className="p-6 md:p-10 max-w-7xl mx-auto">
                         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b-4 border-red-600 pb-8">
-                            <div className="animate-in fade-in slide-in-from-left-4 duration-500">
+                            <div>
                                 <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-red-500 via-white to-blue-600 uppercase leading-none">
                                     BEY-COMMANDER X
                                 </h1>
                                 <p className="text-slate-400 mt-4 font-bold tracking-[0.3em] uppercase text-sm flex items-center gap-2">
-                                    <Icon name="zap" className="text-yellow-500" size={16} /> 巧巧酥的戰鬥陀螺
+                                    <Icon name="user" className="text-red-500" size={16} /> {currentUser} 的戰鬥陀螺
                                 </p>
                             </div>
-                            <div className="bg-slate-900 border-2 border-slate-700 px-6 py-3 rounded-sm transform -skew-x-12 shadow-[5px_5px_0px_#dc2626]">
-                                <div className="skew-x-12 flex items-center gap-3 font-black">
-                                    <Icon name="package" className="text-blue-500" />
-                                    <span className="text-2xl">{ownedIds.size}</span>
-                                    <span className="text-[10px] text-slate-500 uppercase">Collected</span>
+                            <div className="flex gap-4 items-center">
+                                <button 
+                                    onClick={handleLogout}
+                                    className="bg-slate-900 border border-slate-700 px-4 py-2 text-xs font-bold text-slate-400 hover:text-white hover:border-red-600 transition-all flex items-center gap-2"
+                                >
+                                    <Icon name="log-out" size={14} /> 切換使用者
+                                </button>
+                                <div className="bg-slate-900 border-2 border-slate-700 px-6 py-3 rounded-sm transform -skew-x-12 shadow-[5px_5px_0px_#dc2626]">
+                                    <div className="skew-x-12 flex items-center gap-3 font-black">
+                                        <Icon name="package" className="text-blue-500" />
+                                        <span className="text-2xl">{ownedIds.size}</span>
+                                        <span className="text-[10px] text-slate-500 uppercase">Collected</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </header>
 
-                    {/* Navigation */}
                     <nav className="max-w-7xl mx-auto px-6 mb-10 flex flex-wrap gap-3 sticky top-4 z-40">
                         {['catalog', 'parts', 'ranking'].map(tab => (
                             <button 
                                 key={tab} 
                                 onClick={() => setActiveTab(tab)} 
-                                className={`px-8 py-4 font-black transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-red-600 text-white shadow-[6px_6px_0px_white] -translate-y-1' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}
+                                className={`px-8 py-4 font-black transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-red-600 text-white shadow-[6px_6px_0px_white] -translate-y-1' : 'bg-slate-900 text-slate-500 border border-slate-800 hover:text-white'}`}
                             >
                                 <Icon name={tab === 'catalog' ? 'list' : tab === 'parts' ? 'zap' : 'trophy'} size={18} />
                                 {tab === 'catalog' ? '圖鑑' : tab === 'parts' ? '零件庫' : '排行'}
@@ -210,9 +266,8 @@
                     </nav>
 
                     <main className="max-w-7xl mx-auto px-6">
-                        {/* Catalog Tab */}
                         {activeTab === 'catalog' && (
-                            <div className="space-y-8 animate-in fade-in duration-500">
+                            <div className="space-y-8">
                                 <div className="relative group">
                                     <Icon name="search" className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-600 group-focus-within:text-red-600" />
                                     <input 
@@ -225,25 +280,27 @@
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                    {db.filter(b => b.name.includes(searchTerm) || b.id.includes(searchTerm) || b.blade.includes(searchTerm)).map(bey => (
+                                    {filteredDb.map(bey => (
                                         <div 
                                             key={bey.id} 
-                                            className={`bey-card p-5 rounded-lg border-2 bg-slate-900 cursor-pointer ${ownedIds.has(bey.id) ? 'border-red-600' : 'border-slate-800 opacity-60 grayscale hover:grayscale-0'}`} 
+                                            className={`bey-card p-5 rounded-lg border-2 bg-slate-900 cursor-pointer flex flex-col ${ownedIds.has(bey.id) ? 'border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.2)]' : 'border-slate-800 opacity-60 grayscale hover:grayscale-0'}`} 
                                             onClick={(e) => toggleOwned(bey.id, e)}
                                         >
-                                            <div className="flex justify-between mb-4">
+                                            <div className="flex justify-between items-start mb-4">
                                                 <span className={`${bey.series === 'BX' ? 'bg-blue-600' : 'bg-purple-600'} px-2 py-0.5 text-[10px] font-black rounded`}>{bey.id}</span>
-                                                {ownedIds.has(bey.id) ? <Icon name="check-circle" className="text-red-500" /> : <Icon name="circle" className="text-slate-700" />}
+                                                <div className="flex gap-2">
+                                                    <button onClick={(e) => { e.stopPropagation(); handleOpenModal(bey); }} className="p-1 text-slate-500 hover:text-white transition-colors">
+                                                        <Icon name="edit-2" size={16} />
+                                                    </button>
+                                                    {ownedIds.has(bey.id) ? <Icon name="check-circle" className="text-red-500" /> : <Icon name="circle" className="text-slate-700" />}
+                                                </div>
                                             </div>
                                             <h3 className="text-2xl font-black mb-1 truncate">{bey.name}</h3>
                                             <p className="text-slate-500 font-mono text-[10px] mb-4 uppercase">{bey.blade}</p>
                                             
-                                            <div className="bg-black/40 p-3 space-y-2 text-xs font-bold text-slate-400 rounded">
+                                            <div className="bg-black/40 p-3 space-y-2 text-xs font-bold text-slate-400 rounded flex-grow">
                                                 <div className="flex justify-between"><span>RATCHET</span><span className="text-white font-mono">{bey.ratchet}</span></div>
                                                 <div className="flex justify-between"><span>BIT</span><span className="text-white font-mono">{bey.bit}</span></div>
-                                            </div>
-                                            <div className="mt-4 flex justify-end">
-                                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 border rounded-sm ${getTypeColor(bey.type)}`}>{bey.type}</span>
                                             </div>
                                         </div>
                                     ))}
@@ -251,9 +308,8 @@
                             </div>
                         )}
 
-                        {/* Inventory Tab */}
                         {activeTab === 'parts' && (
-                            <div className="bg-slate-900 border-2 border-slate-800 p-8 rounded shadow-2xl animate-in slide-in-from-right-4 duration-500">
+                            <div className="bg-slate-900 border-2 border-slate-800 p-8 rounded shadow-2xl">
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
                                     <div>
                                         <h2 className="text-4xl font-black italic uppercase text-red-600">Inventory</h2>
@@ -271,7 +327,7 @@
                                 {ownedIds.size === 0 ? (
                                     <div className="py-20 text-center border-4 border-dashed border-slate-800">
                                         <Icon name="package" size={64} className="mx-auto text-slate-800 mb-4" />
-                                        <p className="text-slate-500 font-black text-xl italic uppercase">No Parts Found in Storage</p>
+                                        <p className="text-slate-500 font-black text-xl italic uppercase">No Parts Found</p>
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
@@ -285,9 +341,6 @@
                                                             {tier.tier}
                                                         </div>
                                                     )}
-                                                    {!tier && partsFilter !== 'blade' && (
-                                                        <div className="px-4 py-1 text-[10px] font-black rounded-sm bg-slate-800 text-slate-500">UNRANKED</div>
-                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -296,9 +349,8 @@
                             </div>
                         )}
 
-                        {/* Ranking Tab */}
                         {activeTab === 'ranking' && (
-                            <div className="grid md:grid-cols-2 gap-12 animate-in slide-in-from-left-4 duration-500">
+                            <div className="grid md:grid-cols-2 gap-12">
                                 {['bits', 'ratchets'].map(cat => (
                                     <div key={cat} className="space-y-6">
                                         <div className="flex items-center gap-4 mb-8">
@@ -319,42 +371,39 @@
                         )}
                     </main>
 
-                    {/* Floating FAB */}
                     <button 
-                        onClick={() => { setFormData({ id: '', name: '', blade: '', ratchet: '', bit: '', series: 'BX', type: 'Attack' }); setIsModalOpen(true); }} 
-                        className="fixed bottom-8 right-8 w-16 h-16 bg-red-600 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.4)] border-4 border-white z-50 transform hover:scale-110 active:scale-95 transition-transform"
+                        onClick={() => handleOpenModal()} 
+                        className="fixed bottom-8 right-8 w-16 h-16 bg-red-600 rounded-full flex items-center justify-center shadow-xl border-4 border-white z-50 transform hover:scale-110 active:scale-95 transition-transform"
                     >
                         <Icon name="plus" size={32} className="text-white" />
                     </button>
 
-                    {/* Add Modal */}
                     {isModalOpen && (
-                        <div className="fixed inset-0 bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in duration-200">
+                        <div className="fixed inset-0 bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
                             <div className="bg-slate-900 border-4 border-red-600 p-8 w-full max-w-md shadow-2xl relative">
                                 <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><Icon name="x" size={24} /></button>
                                 <h2 className="text-3xl font-black italic mb-8 text-red-600 uppercase flex items-center gap-2">
-                                    <Icon name="plus-circle" /> 新增陀螺
+                                    <Icon name={editingBey ? "edit-2" : "plus-circle"} /> {editingBey ? "編輯陀螺" : "新增陀螺"}
                                 </h2>
                                 <div className="space-y-5">
                                     <div>
                                         <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">型號 (ID)</label>
-                                        <input placeholder="BX-99" className="w-full bg-black border border-slate-700 p-3 text-white font-bold focus:border-red-600 outline-none" value={formData.id} onChange={e => setFormData({...formData, id: e.target.value})} />
+                                        <input disabled={!!editingBey} placeholder="BX-99" className={`w-full bg-black border border-slate-700 p-3 text-white font-bold focus:border-red-600 outline-none ${editingBey ? 'opacity-50' : ''}`} value={formData.id} onChange={e => setFormData({...formData, id: e.target.value})} />
                                     </div>
                                     <div>
                                         <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">名稱 (中文)</label>
-                                        <input placeholder="我的強力陀螺" className="w-full bg-black border border-slate-700 p-3 text-white font-bold focus:border-red-600 outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                                        <input placeholder="名稱" className="w-full bg-black border border-slate-700 p-3 text-white font-bold focus:border-red-600 outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">固鎖 (Ratchet)</label>
-                                            <input placeholder="3-60" className="w-full bg-black border border-slate-700 p-3 text-white font-bold focus:border-red-600 outline-none" value={formData.ratchet} onChange={e => setFormData({...formData, ratchet: e.target.value})} />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">軸心 (Bit)</label>
-                                            <input placeholder="F" className="w-full bg-black border border-slate-700 p-3 text-white font-bold focus:border-red-600 outline-none" value={formData.bit} onChange={e => setFormData({...formData, bit: e.target.value})} />
-                                        </div>
+                                        <input placeholder="固鎖" className="w-full bg-black border border-slate-700 p-3 text-white font-bold focus:border-red-600 outline-none" value={formData.ratchet} onChange={e => setFormData({...formData, ratchet: e.target.value})} />
+                                        <input placeholder="軸心" className="w-full bg-black border border-slate-700 p-3 text-white font-bold focus:border-red-600 outline-none" value={formData.bit} onChange={e => setFormData({...formData, bit: e.target.value})} />
                                     </div>
-                                    <button onClick={handleSave} className="w-full bg-red-600 py-4 font-black text-white mt-6 shadow-[0_4px_20px_rgba(220,38,38,0.3)] hover:bg-red-500 transition-colors">儲存數據</button>
+                                    <div className="flex gap-4 mt-6">
+                                        {editingBey && (
+                                            <button onClick={() => handleDelete(editingBey)} className="flex-1 bg-slate-800 py-4 font-black text-red-500 hover:bg-slate-700">刪除</button>
+                                        )}
+                                        <button onClick={handleSave} className="flex-[2] bg-red-600 py-4 font-black text-white">儲存數據</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
