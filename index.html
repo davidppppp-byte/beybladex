@@ -51,22 +51,6 @@
             ]
         };
 
-        const INITIAL_DATABASE = [
-            { id: "BX-00", name: "蒼穹龍神", blade: "Dranzer Spiral", ratchet: "3-80", bit: "T", series: "BX", type: "Balance" },
-            { id: "BX-01", name: "蒼龍騎士", blade: "Dran Sword", ratchet: "3-60", bit: "F", series: "BX", type: "Attack" },
-            { id: "BX-02", name: "地獄鐮刀", blade: "Hells Scythe", ratchet: "4-60", bit: "T", series: "BX", type: "Balance" },
-            { id: "BX-03", name: "巫師箭矢", blade: "Wizard Arrow", ratchet: "4-80", bit: "B", series: "BX", type: "Stamina" },
-            { id: "BX-04", name: "騎士護盾", blade: "Knight Shield", ratchet: "3-80", bit: "N", series: "BX", type: "Defense" },
-            { id: "BX-08", name: "鯊魚末日 (V1)", blade: "Shark Edge", ratchet: "3-60", bit: "LF", series: "BX", type: "Attack" },
-            { id: "BX-10", name: "騎士長槍", blade: "Knight Lance", ratchet: "4-80", bit: "HN", series: "BX", type: "Defense" },
-            { id: "BX-14", name: "鯊魚末日 (V2)", blade: "Shark Edge", ratchet: "3-60", bit: "LF", series: "BX", type: "Attack" },
-            { id: "BX-15", name: "獅子之爪", blade: "Leon Claw", ratchet: "5-60", bit: "P", series: "BX", type: "Balance" },
-            { id: "BX-23", name: "鳳凰羽翼", blade: "Phoenix Wing", ratchet: "9-60", bit: "GF", series: "BX", type: "Attack" },
-            { id: "BX-31", name: "暴龍破壞", blade: "Tyranno Beat", ratchet: "4-70", bit: "Q", series: "BX", type: "Attack" },
-            { id: "BX-34", name: "鈷藍龍騎", blade: "Cobalt Dragoon", ratchet: "2-60", bit: "L", series: "BX", type: "Attack", rotation: "Left" },
-            { id: "CX-14", name: "騎士堡壘", blade: "Knight Fortress", ratchet: "5-80", bit: "DOT", series: "CX", type: "Defense" },
-        ];
-
         const USERS = ["巧巧酥", "黃美", "小剛", "小駿"];
 
         const Icon = ({ name, size = 24, className = "" }) => {
@@ -76,78 +60,119 @@
 
         const App = () => {
             const [currentUser, setCurrentUser] = useState(localStorage.getItem('bey_current_user') || null);
-            const [db, setDb] = useState([]);
-            const [ownedIds, setOwnedIds] = useState(new Set());
+            const [ownedDb, setOwnedDb] = useState([]); // 改名為 ownedDb，使用者自己買的
+            const [combos, setCombos] = useState([]);   // 搭配區資料
             const [activeTab, setActiveTab] = useState('catalog');
             const [searchTerm, setSearchTerm] = useState('');
             const [partsFilter, setPartsFilter] = useState('blade');
-            const [isModalOpen, setIsModalOpen] = useState(false);
-            const [editingBey, setEditingBey] = useState(null);
-            const [formData, setFormData] = useState({ id: '', name: '', blade: '', ratchet: '', bit: '', series: 'BX', type: 'Attack' });
+            
+            // Modal 狀態
+            const [isOwnedModalOpen, setIsOwnedModalOpen] = useState(false);
+            const [isComboModalOpen, setIsComboModalOpen] = useState(false);
+            const [editingItem, setEditingItem] = useState(null);
+            
+            // 表單狀態
+            const [ownedForm, setOwnedForm] = useState({ id: '', name: '', ratchet: '', bit: '', type: 'Attack' });
+            const [comboForm, setComboForm] = useState({ id: Date.now(), title: '', blade: '', ratchet: '', bit: '', note: '' });
 
-            // 當切換使用者時，讀取該使用者的資料
+            // 登入後讀取資料
             useEffect(() => {
                 if (currentUser) {
                     localStorage.setItem('bey_current_user', currentUser);
-                    
-                    const savedDb = localStorage.getItem(`bey_db_${currentUser}`);
-                    if (savedDb) {
-                        setDb(JSON.parse(savedDb));
-                    } else {
-                        setDb(INITIAL_DATABASE);
-                    }
-
-                    const savedOwned = localStorage.getItem(`bey_owned_${currentUser}`);
-                    setOwnedIds(savedOwned ? new Set(JSON.parse(savedOwned)) : new Set());
+                    const savedOwned = localStorage.getItem(`bey_owned_list_${currentUser}`);
+                    setOwnedDb(savedOwned ? JSON.parse(savedOwned) : []);
+                    const savedCombos = localStorage.getItem(`bey_combos_${currentUser}`);
+                    setCombos(savedCombos ? JSON.parse(savedCombos) : []);
                 }
             }, [currentUser]);
 
-            // 持久化儲存目前的資料到當前帳號
+            // 自動儲存
             useEffect(() => {
-                if (currentUser && db.length > 0) {
-                    localStorage.setItem(`bey_db_${currentUser}`, JSON.stringify(db));
-                    localStorage.setItem(`bey_owned_${currentUser}`, JSON.stringify(Array.from(ownedIds)));
+                if (currentUser) {
+                    localStorage.setItem(`bey_owned_list_${currentUser}`, JSON.stringify(ownedDb));
+                    localStorage.setItem(`bey_combos_${currentUser}`, JSON.stringify(combos));
                 }
-            }, [db, ownedIds, currentUser]);
+            }, [ownedDb, combos, currentUser]);
 
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
 
-            // 登出
             const handleLogout = () => {
                 setCurrentUser(null);
                 localStorage.removeItem('bey_current_user');
             };
 
-            const handleOpenModal = (bey = null) => {
-                if (bey) {
-                    setEditingBey(bey.id);
-                    setFormData(bey);
+            // --- 已購入區功能 ---
+            const openOwnedModal = (item = null) => {
+                if (item) {
+                    setEditingItem(item.id);
+                    setOwnedForm(item);
                 } else {
-                    setEditingBey(null);
-                    setFormData({ id: '', name: '', blade: '', ratchet: '', bit: '', series: 'BX', type: 'Attack' });
+                    setEditingItem(null);
+                    setOwnedForm({ id: `OWN-${Date.now()}`, name: '', ratchet: '', bit: '', type: 'Attack' });
                 }
-                setIsModalOpen(true);
+                setIsOwnedModalOpen(true);
             };
 
-            const handleSave = () => {
-                if (!formData.id || !formData.name) return;
-                if (editingBey) {
-                    setDb(db.map(b => b.id === editingBey ? formData : b));
+            const saveOwned = () => {
+                if (!ownedForm.name) return;
+                if (editingItem) {
+                    setOwnedDb(ownedDb.map(b => b.id === editingItem ? ownedForm : b));
                 } else {
-                    setDb([...db, formData]);
+                    setOwnedDb([...ownedDb, ownedForm]);
                 }
-                setIsModalOpen(false);
+                setIsOwnedModalOpen(false);
             };
 
-            const handleDelete = (id) => {
-                if (confirm('確定要刪除這款陀螺嗎？')) {
-                    setDb(db.filter(b => b.id !== id));
-                    const newOwned = new Set(ownedIds);
-                    newOwned.delete(id);
-                    setOwnedIds(newOwned);
-                    setIsModalOpen(false);
+            const deleteOwned = (id) => {
+                if (confirm('確定要移除這款陀螺紀錄嗎？')) {
+                    setOwnedDb(ownedDb.filter(b => b.id !== id));
+                    setIsOwnedModalOpen(false);
                 }
             };
+
+            // --- 搭配區功能 ---
+            const openComboModal = (item = null) => {
+                if (item) {
+                    setEditingItem(item.id);
+                    setComboForm(item);
+                } else {
+                    setEditingItem(null);
+                    setComboForm({ id: Date.now(), title: '', blade: '', ratchet: '', bit: '', note: '' });
+                }
+                setIsComboModalOpen(true);
+            };
+
+            const saveCombo = () => {
+                if (!comboForm.title) return;
+                if (editingItem) {
+                    setCombos(combos.map(c => c.id === editingItem ? comboForm : c));
+                } else {
+                    setCombos([...combos, comboForm]);
+                }
+                setIsComboModalOpen(false);
+            };
+
+            const deleteCombo = (id) => {
+                if (confirm('確定要刪除這組搭配嗎？')) {
+                    setCombos(combos.filter(c => c.id !== id));
+                    setIsComboModalOpen(false);
+                }
+            };
+
+            // --- 計算零件庫 ---
+            const ownedParts = useMemo(() => {
+                const parts = { blades: new Set(), ratchets: new Set(), bits: new Set() };
+                ownedDb.forEach(bey => {
+                    parts.blades.add(bey.name);
+                    parts.ratchets.add(bey.ratchet);
+                    parts.bits.add(bey.bit);
+                });
+                return {
+                    blades: Array.from(parts.blades).sort(),
+                    ratchets: Array.from(parts.ratchets).sort(),
+                    bits: Array.from(parts.bits).sort()
+                };
+            }, [ownedDb]);
 
             const getPartTierInfo = (partName, category) => {
                 if (category === 'blade') return null;
@@ -158,40 +183,6 @@
                 return null;
             };
 
-            const toggleOwned = (id, e) => {
-                e.stopPropagation();
-                const newOwned = new Set(ownedIds);
-                if (newOwned.has(id)) newOwned.delete(id);
-                else newOwned.add(id);
-                setOwnedIds(newOwned);
-            };
-
-            const filteredDb = useMemo(() => {
-                const term = searchTerm.toLowerCase();
-                return db.filter(b => 
-                    b.name.toLowerCase().includes(term) || 
-                    b.id.toLowerCase().includes(term) || 
-                    b.blade.toLowerCase().includes(term)
-                );
-            }, [db, searchTerm]);
-
-            const ownedParts = useMemo(() => {
-                const parts = { blades: new Set(), ratchets: new Set(), bits: new Set() };
-                db.forEach(bey => {
-                    if (ownedIds.has(bey.id)) {
-                        parts.blades.add(bey.name);
-                        parts.ratchets.add(bey.ratchet);
-                        parts.bits.add(bey.bit);
-                    }
-                });
-                return {
-                    blades: Array.from(parts.blades).sort(),
-                    ratchets: Array.from(parts.ratchets).sort(),
-                    bits: Array.from(parts.bits).sort()
-                };
-            }, [ownedIds, db]);
-
-            // --- 登入畫面 ---
             if (!currentUser) {
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-6">
@@ -203,27 +194,19 @@
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl">
                             {USERS.map(user => (
-                                <button
-                                    key={user}
-                                    onClick={() => setCurrentUser(user)}
-                                    className="login-btn p-8 bg-slate-900 border-2 border-slate-800 rounded-lg text-3xl font-black hover:border-red-600 hover:bg-slate-800 group relative overflow-hidden"
-                                >
-                                    <div className="absolute top-0 left-0 w-1 h-full bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                <button key={user} onClick={() => setCurrentUser(user)} className="login-btn p-8 bg-slate-900 border-2 border-slate-800 rounded-lg text-3xl font-black hover:border-red-600 hover:bg-slate-800 group relative">
                                     <span className="group-hover:text-red-500 transition-colors">{user}</span>
                                     <div className="mt-2 text-xs text-slate-600 uppercase tracking-widest font-bold">Commander Entry</div>
                                 </button>
                             ))}
                         </div>
-                        <footer className="mt-20 text-slate-800 text-[10px] font-black uppercase tracking-widest">
-                            Authorized Access Only // System 2.0
-                        </footer>
                     </div>
                 );
             }
 
-            // --- 主介面 ---
             return (
                 <div className="min-h-screen pb-24">
+                    {/* Header */}
                     <header className="p-6 md:p-10 max-w-7xl mx-auto">
                         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b-4 border-red-600 pb-8">
                             <div>
@@ -235,86 +218,128 @@
                                 </p>
                             </div>
                             <div className="flex gap-4 items-center">
-                                <button 
-                                    onClick={handleLogout}
-                                    className="bg-slate-900 border border-slate-700 px-4 py-2 text-xs font-bold text-slate-400 hover:text-white hover:border-red-600 transition-all flex items-center gap-2"
-                                >
-                                    <Icon name="log-out" size={14} /> 切換使用者
+                                <button onClick={handleLogout} className="bg-slate-900 border border-slate-700 px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition-all flex items-center gap-2">
+                                    <Icon name="log-out" size={14} /> 切換帳號
                                 </button>
-                                <div className="bg-slate-900 border-2 border-slate-700 px-6 py-3 rounded-sm transform -skew-x-12 shadow-[5px_5px_0px_#dc2626]">
-                                    <div className="skew-x-12 flex items-center gap-3 font-black">
+                                <div className="bg-slate-900 border-2 border-slate-700 px-6 py-3 rounded-sm shadow-[5px_5px_0px_#dc2626]">
+                                    <div className="flex items-center gap-3 font-black">
                                         <Icon name="package" className="text-blue-500" />
-                                        <span className="text-2xl">{ownedIds.size}</span>
-                                        <span className="text-[10px] text-slate-500 uppercase">Collected</span>
+                                        <span className="text-2xl">{ownedDb.length}</span>
+                                        <span className="text-[10px] text-slate-500 uppercase">Owned</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </header>
 
+                    {/* Nav */}
                     <nav className="max-w-7xl mx-auto px-6 mb-10 flex flex-wrap gap-3 sticky top-4 z-40">
-                        {['catalog', 'parts', 'ranking'].map(tab => (
+                        {[
+                            { id: 'catalog', label: '已購入區', icon: 'shopping-cart' },
+                            { id: 'combos', label: '搭配區', icon: 'layout' },
+                            { id: 'parts', label: '零件庫', icon: 'zap' },
+                            { id: 'ranking', label: '排行', icon: 'trophy' }
+                        ].map(tab => (
                             <button 
-                                key={tab} 
-                                onClick={() => setActiveTab(tab)} 
-                                className={`px-8 py-4 font-black transition-all flex items-center gap-2 ${activeTab === tab ? 'bg-red-600 text-white shadow-[6px_6px_0px_white] -translate-y-1' : 'bg-slate-900 text-slate-500 border border-slate-800 hover:text-white'}`}
+                                key={tab.id} 
+                                onClick={() => setActiveTab(tab.id)} 
+                                className={`px-8 py-4 font-black transition-all flex items-center gap-2 ${activeTab === tab.id ? 'bg-red-600 text-white shadow-[6px_6px_0px_white] -translate-y-1' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}
                             >
-                                <Icon name={tab === 'catalog' ? 'list' : tab === 'parts' ? 'zap' : 'trophy'} size={18} />
-                                {tab === 'catalog' ? '圖鑑' : tab === 'parts' ? '零件庫' : '排行'}
+                                <Icon name={tab.icon} size={18} />
+                                {tab.label}
                             </button>
                         ))}
                     </nav>
 
                     <main className="max-w-7xl mx-auto px-6">
+                        {/* 已購入區 */}
                         {activeTab === 'catalog' && (
-                            <div className="space-y-8">
-                                <div className="relative group">
-                                    <Icon name="search" className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-600 group-focus-within:text-red-600" />
-                                    <input 
-                                        type="text" 
-                                        placeholder="搜尋型號、名稱、戰刃..." 
-                                        className="w-full bg-slate-900/50 border-2 border-slate-800 py-5 pl-16 pr-6 focus:outline-none focus:border-red-600 text-xl font-bold rounded-lg"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
+                            <div className="space-y-8 animate-in fade-in duration-500">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-4xl font-black italic uppercase text-red-600">Purchased</h2>
+                                    <button onClick={() => openOwnedModal()} className="bg-blue-600 px-6 py-3 font-black text-sm flex items-center gap-2 hover:bg-blue-500 transition-colors">
+                                        <Icon name="plus" size={18} /> 新增購入
+                                    </button>
                                 </div>
-
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                    {filteredDb.map(bey => (
-                                        <div 
-                                            key={bey.id} 
-                                            className={`bey-card p-5 rounded-lg border-2 bg-slate-900 cursor-pointer flex flex-col ${ownedIds.has(bey.id) ? 'border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.2)]' : 'border-slate-800 opacity-60 grayscale hover:grayscale-0'}`} 
-                                            onClick={(e) => toggleOwned(bey.id, e)}
-                                        >
-                                            <div className="flex justify-between items-start mb-4">
-                                                <span className={`${bey.series === 'BX' ? 'bg-blue-600' : 'bg-purple-600'} px-2 py-0.5 text-[10px] font-black rounded`}>{bey.id}</span>
-                                                <div className="flex gap-2">
-                                                    <button onClick={(e) => { e.stopPropagation(); handleOpenModal(bey); }} className="p-1 text-slate-500 hover:text-white transition-colors">
-                                                        <Icon name="edit-2" size={16} />
+                                    {ownedDb.length === 0 ? (
+                                        <div className="col-span-full py-20 text-center border-4 border-dashed border-slate-800 rounded-lg">
+                                            <Icon name="shopping-bag" size={48} className="mx-auto text-slate-800 mb-4" />
+                                            <p className="text-slate-600 font-black text-xl uppercase italic">目前沒有購入紀錄</p>
+                                        </div>
+                                    ) : (
+                                        ownedDb.map(bey => (
+                                            <div key={bey.id} className="bey-card p-5 rounded-lg border-2 border-red-600 bg-slate-900 group">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <span className="bg-blue-600 px-2 py-0.5 text-[10px] font-black rounded uppercase">P-LOG</span>
+                                                    <button onClick={() => openOwnedModal(bey)} className="p-1 text-slate-500 hover:text-white transition-colors">
+                                                        <Icon name="edit-3" size={16} />
                                                     </button>
-                                                    {ownedIds.has(bey.id) ? <Icon name="check-circle" className="text-red-500" /> : <Icon name="circle" className="text-slate-700" />}
+                                                </div>
+                                                <h3 className="text-2xl font-black mb-4 truncate text-white">{bey.name}</h3>
+                                                <div className="bg-black/40 p-3 space-y-2 text-xs font-bold text-slate-400 rounded">
+                                                    <div className="flex justify-between"><span>RATCHET</span><span className="text-white font-mono">{bey.ratchet}</span></div>
+                                                    <div className="flex justify-between"><span>BIT</span><span className="text-white font-mono">{bey.bit}</span></div>
                                                 </div>
                                             </div>
-                                            <h3 className="text-2xl font-black mb-1 truncate">{bey.name}</h3>
-                                            <p className="text-slate-500 font-mono text-[10px] mb-4 uppercase">{bey.blade}</p>
-                                            
-                                            <div className="bg-black/40 p-3 space-y-2 text-xs font-bold text-slate-400 rounded flex-grow">
-                                                <div className="flex justify-between"><span>RATCHET</span><span className="text-white font-mono">{bey.ratchet}</span></div>
-                                                <div className="flex justify-between"><span>BIT</span><span className="text-white font-mono">{bey.bit}</span></div>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        ))
+                                    )}
                                 </div>
                             </div>
                         )}
 
+                        {/* 搭配區 */}
+                        {activeTab === 'combos' && (
+                            <div className="space-y-8 animate-in fade-in duration-500">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-4xl font-black italic uppercase text-red-600">Custom Combo</h2>
+                                    <button onClick={() => openComboModal()} className="bg-red-600 px-6 py-3 font-black text-sm flex items-center gap-2 hover:bg-red-500 transition-colors">
+                                        <Icon name="plus" size={18} /> 新增配置
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {combos.length === 0 ? (
+                                        <div className="col-span-full py-20 text-center border-4 border-dashed border-slate-800 rounded-lg">
+                                            <Icon name="swords" size={48} className="mx-auto text-slate-800 mb-4" />
+                                            <p className="text-slate-600 font-black text-xl uppercase italic">尚未新增戰鬥配置</p>
+                                        </div>
+                                    ) : (
+                                        combos.map(combo => (
+                                            <div key={combo.id} className="p-6 bg-slate-900 border-2 border-slate-800 rounded-lg flex flex-col hover:border-red-600 transition-colors group">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <h3 className="text-3xl font-black text-red-600 italic uppercase truncate mr-4">{combo.title}</h3>
+                                                    <button onClick={() => openComboModal(combo)} className="p-1 text-slate-500 hover:text-white"><Icon name="settings" size={20} /></button>
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-4 mb-6">
+                                                    <div className="text-center">
+                                                        <div className="text-[10px] font-black text-slate-500 mb-1 uppercase tracking-widest">Blade</div>
+                                                        <div className="bg-black p-2 font-bold text-sm h-full flex items-center justify-center border border-slate-800">{combo.blade}</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="text-[10px] font-black text-slate-500 mb-1 uppercase tracking-widest">Ratchet</div>
+                                                        <div className="bg-black p-2 font-bold text-sm h-full flex items-center justify-center border border-slate-800">{combo.ratchet}</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="text-[10px] font-black text-slate-500 mb-1 uppercase tracking-widest">Bit</div>
+                                                        <div className="bg-black p-2 font-bold text-sm h-full flex items-center justify-center border border-slate-800">{combo.bit}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-slate-800 p-4 rounded text-sm border-l-4 border-red-600">
+                                                    <div className="text-[10px] font-black text-red-500 mb-1 uppercase tracking-tighter">Combat Notes</div>
+                                                    <p className="text-slate-300 leading-relaxed font-bold">{combo.note || "未填寫備註"}</p>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 零件庫 */}
                         {activeTab === 'parts' && (
-                            <div className="bg-slate-900 border-2 border-slate-800 p-8 rounded shadow-2xl">
+                            <div className="bg-slate-900 border-2 border-slate-800 p-8 rounded">
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-                                    <div>
-                                        <h2 className="text-4xl font-black italic uppercase text-red-600">Inventory</h2>
-                                        <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mt-1">已解鎖戰鬥零件庫</p>
-                                    </div>
+                                    <h2 className="text-4xl font-black italic uppercase text-red-600">Inventory</h2>
                                     <div className="flex bg-black p-1 border border-slate-800">
                                         {['blade', 'ratchet', 'bit'].map(f => (
                                             <button key={f} onClick={() => setPartsFilter(f)} className={`px-8 py-3 font-black text-sm transition-all ${partsFilter === f ? 'bg-red-600 text-white shadow-lg' : 'text-slate-600 hover:text-slate-300'}`}>
@@ -323,32 +348,21 @@
                                         ))}
                                     </div>
                                 </div>
-
-                                {ownedIds.size === 0 ? (
-                                    <div className="py-20 text-center border-4 border-dashed border-slate-800">
-                                        <Icon name="package" size={64} className="mx-auto text-slate-800 mb-4" />
-                                        <p className="text-slate-500 font-black text-xl italic uppercase">No Parts Found</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                                        {(partsFilter === 'blade' ? ownedParts.blades : (partsFilter === 'ratchet' ? ownedParts.ratchets : ownedParts.bits)).map(part => {
-                                            const tier = getPartTierInfo(part, partsFilter);
-                                            return (
-                                                <div key={part} className="bg-slate-950 border-2 border-slate-800 p-6 text-center min-h-[140px] flex flex-col items-center justify-center relative hover:border-white transition-colors group">
-                                                    <div className={`font-black text-white mb-3 ${partsFilter !== 'blade' ? 'font-mono text-xl' : 'text-sm'}`}>{part}</div>
-                                                    {tier && (
-                                                        <div className={`px-4 py-1 text-[10px] font-black rounded-sm shadow-lg ${tier.color}`}>
-                                                            {tier.tier}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
+                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                                    {(partsFilter === 'blade' ? ownedParts.blades : (partsFilter === 'ratchet' ? ownedParts.ratchets : ownedParts.bits)).map(part => {
+                                        const tier = getPartTierInfo(part, partsFilter);
+                                        return (
+                                            <div key={part} className="bg-slate-950 border-2 border-slate-800 p-6 text-center min-h-[140px] flex flex-col items-center justify-center relative hover:border-white transition-colors">
+                                                <div className={`font-black text-white mb-3 ${partsFilter !== 'blade' ? 'font-mono text-xl' : 'text-sm'}`}>{part}</div>
+                                                {tier && <div className={`px-4 py-1 text-[10px] font-black rounded-sm ${tier.color}`}>{tier.tier}</div>}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
 
+                        {/* 排行 */}
                         {activeTab === 'ranking' && (
                             <div className="grid md:grid-cols-2 gap-12">
                                 {['bits', 'ratchets'].map(cat => (
@@ -357,52 +371,60 @@
                                             <Icon name={cat === 'bits' ? 'zap' : 'shield'} className={cat === 'bits' ? 'text-yellow-500' : 'text-blue-500'} size={40} />
                                             <h2 className="text-5xl font-black italic uppercase tracking-tighter">{cat === 'bits' ? '軸心排行' : '固鎖排行'}</h2>
                                         </div>
-                                        <div className="space-y-3">
-                                            {RANKING_DATA[cat].map(r => (
-                                                <div key={r.tier} className="flex gap-4 group">
-                                                    <div className={`w-14 h-14 shrink-0 flex items-center justify-center font-black text-xl italic ${r.color} shadow-[4px_4px_0px_rgba(255,255,255,0.1)]`}>{r.tier}</div>
-                                                    <div className="bg-slate-900 border border-slate-800 p-4 flex-grow font-mono font-bold text-slate-200 group-hover:border-slate-500 transition-colors flex items-center">{r.items}</div>
-                                                </div>
-                                            ))}
-                                        </div>
+                                        {RANKING_DATA[cat].map(r => (
+                                            <div key={r.tier} className="flex gap-4 group">
+                                                <div className={`w-14 h-14 shrink-0 flex items-center justify-center font-black text-xl italic ${r.color}`}>{r.tier}</div>
+                                                <div className="bg-slate-900 border border-slate-800 p-4 flex-grow font-mono font-bold text-slate-200 group-hover:border-slate-500 flex items-center">{r.items}</div>
+                                            </div>
+                                        ))}
                                     </div>
                                 ))}
                             </div>
                         )}
                     </main>
 
-                    <button 
-                        onClick={() => handleOpenModal()} 
-                        className="fixed bottom-8 right-8 w-16 h-16 bg-red-600 rounded-full flex items-center justify-center shadow-xl border-4 border-white z-50 transform hover:scale-110 active:scale-95 transition-transform"
-                    >
-                        <Icon name="plus" size={32} className="text-white" />
-                    </button>
-
-                    {isModalOpen && (
+                    {/* Owned Modal */}
+                    {isOwnedModalOpen && (
                         <div className="fixed inset-0 bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
-                            <div className="bg-slate-900 border-4 border-red-600 p-8 w-full max-w-md shadow-2xl relative">
-                                <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><Icon name="x" size={24} /></button>
-                                <h2 className="text-3xl font-black italic mb-8 text-red-600 uppercase flex items-center gap-2">
-                                    <Icon name={editingBey ? "edit-2" : "plus-circle"} /> {editingBey ? "編輯陀螺" : "新增陀螺"}
-                                </h2>
+                            <div className="bg-slate-900 border-4 border-blue-600 p-8 w-full max-w-md shadow-2xl relative">
+                                <button onClick={() => setIsOwnedModalOpen(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><Icon name="x" /></button>
+                                <h2 className="text-3xl font-black italic mb-8 text-blue-600 uppercase">購入陀螺紀錄</h2>
                                 <div className="space-y-5">
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">型號 (ID)</label>
-                                        <input disabled={!!editingBey} placeholder="BX-99" className={`w-full bg-black border border-slate-700 p-3 text-white font-bold focus:border-red-600 outline-none ${editingBey ? 'opacity-50' : ''}`} value={formData.id} onChange={e => setFormData({...formData, id: e.target.value})} />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-500 uppercase block mb-1">名稱 (中文)</label>
-                                        <input placeholder="名稱" className="w-full bg-black border border-slate-700 p-3 text-white font-bold focus:border-red-600 outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                                    </div>
+                                    <input placeholder="陀螺名稱 (中文)" className="w-full bg-black border border-slate-700 p-3 text-white font-bold outline-none" value={ownedForm.name} onChange={e => setOwnedForm({...ownedForm, name: e.target.value})} />
                                     <div className="grid grid-cols-2 gap-4">
-                                        <input placeholder="固鎖" className="w-full bg-black border border-slate-700 p-3 text-white font-bold focus:border-red-600 outline-none" value={formData.ratchet} onChange={e => setFormData({...formData, ratchet: e.target.value})} />
-                                        <input placeholder="軸心" className="w-full bg-black border border-slate-700 p-3 text-white font-bold focus:border-red-600 outline-none" value={formData.bit} onChange={e => setFormData({...formData, bit: e.target.value})} />
+                                        <input placeholder="固鎖 (如 3-60)" className="w-full bg-black border border-slate-700 p-3 text-white font-bold outline-none font-mono" value={ownedForm.ratchet} onChange={e => setOwnedForm({...ownedForm, ratchet: e.target.value})} />
+                                        <input placeholder="軸心 (如 F)" className="w-full bg-black border border-slate-700 p-3 text-white font-bold outline-none font-mono" value={ownedForm.bit} onChange={e => setOwnedForm({...ownedForm, bit: e.target.value})} />
                                     </div>
                                     <div className="flex gap-4 mt-6">
-                                        {editingBey && (
-                                            <button onClick={() => handleDelete(editingBey)} className="flex-1 bg-slate-800 py-4 font-black text-red-500 hover:bg-slate-700">刪除</button>
+                                        {editingItem && (
+                                            <button onClick={() => deleteOwned(editingItem)} className="flex-1 bg-slate-800 py-4 font-black text-red-500">刪除</button>
                                         )}
-                                        <button onClick={handleSave} className="flex-[2] bg-red-600 py-4 font-black text-white">儲存數據</button>
+                                        <button onClick={saveOwned} className="flex-[2] bg-blue-600 py-4 font-black text-white">儲存紀錄</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Combo Modal */}
+                    {isComboModalOpen && (
+                        <div className="fixed inset-0 bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+                            <div className="bg-slate-900 border-4 border-red-600 p-8 w-full max-w-md shadow-2xl relative">
+                                <button onClick={() => setIsComboModalOpen(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><Icon name="x" /></button>
+                                <h2 className="text-3xl font-black italic mb-8 text-red-600 uppercase">戰術配置搭配</h2>
+                                <div className="space-y-5">
+                                    <input placeholder="搭配名稱 (如 爆裂瞬發裝)" className="w-full bg-black border border-slate-700 p-3 text-white font-bold outline-none" value={comboForm.title} onChange={e => setComboForm({...comboForm, title: e.target.value})} />
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <input placeholder="戰刃" className="bg-black border border-slate-700 p-2 text-xs text-white" value={comboForm.blade} onChange={e => setComboForm({...comboForm, blade: e.target.value})} />
+                                        <input placeholder="固鎖" className="bg-black border border-slate-700 p-2 text-xs text-white" value={comboForm.ratchet} onChange={e => setComboForm({...comboForm, ratchet: e.target.value})} />
+                                        <input placeholder="軸心" className="bg-black border border-slate-700 p-2 text-xs text-white" value={comboForm.bit} onChange={e => setComboForm({...comboForm, bit: e.target.value})} />
+                                    </div>
+                                    <textarea placeholder="戰術備註：例如針對持久型或是路徑選擇..." className="w-full bg-black border border-slate-700 p-3 text-white text-sm h-32 resize-none outline-none" value={comboForm.note} onChange={e => setComboForm({...comboForm, note: e.target.value})}></textarea>
+                                    <div className="flex gap-4">
+                                        {editingItem && (
+                                            <button onClick={() => deleteCombo(editingItem)} className="flex-1 bg-slate-800 py-4 font-black text-red-500">刪除</button>
+                                        )}
+                                        <button onClick={saveCombo} className="flex-[2] bg-red-600 py-4 font-black text-white">儲存配置</button>
                                     </div>
                                 </div>
                             </div>
