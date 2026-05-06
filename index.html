@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- 導入 Lucide 圖示 -->
+    <!-- 導入 Lucide 圖示 (Vanilla JS 版) -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- 導入 Firebase SDK -->
     <script type="module">
@@ -22,7 +22,7 @@
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; overflow-x: hidden; }
+        body { font-family: 'Noto Sans TC', sans-serif; overflow-x: hidden; background-color: #020617; }
         .bey-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .bey-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px -5px rgba(220, 38, 38, 0.3); }
         .login-btn { transition: all 0.3s ease; }
@@ -34,11 +34,11 @@
         .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 selection:bg-red-600 selection:text-white">
+<body class="text-slate-100 selection:bg-red-600 selection:text-white">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useMemo, useEffect } = React;
+        const { useState, useMemo, useEffect, useRef } = React;
 
         // --- 使用者提供的 Firebase 配置 ---
         const firebaseConfig = {
@@ -51,11 +51,6 @@
         };
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'beyblade-x-manager';
-        const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, doc, setDoc, onSnapshot } = window.FirebaseLib;
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
 
         // --- 排行榜資料 ---
         const RANKING_DATA = {
@@ -79,18 +74,36 @@
 
         const USERS_LIST = ["巧巧酥", "黃美", "小剛", "小駿"];
 
+        // --- 安全的圖示組件：防止 React 節點被 Lucide 直接替換導致 NotFoundError ---
         const Icon = ({ name, size = 24, className = "" }) => {
-            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
-            return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
+            const containerRef = useRef(null);
+            useEffect(() => {
+                if (window.lucide && containerRef.current) {
+                    containerRef.current.innerHTML = `<i data-lucide="${name}"></i>`;
+                    window.lucide.createIcons({
+                        node: containerRef.current
+                    });
+                    const svg = containerRef.current.querySelector('svg');
+                    if (svg) {
+                        svg.setAttribute('width', size);
+                        svg.setAttribute('height', size);
+                        if (className) {
+                            svg.classList.add(...className.split(' ').filter(c => c));
+                        }
+                    }
+                }
+            }, [name, size, className]);
+            return <span ref={containerRef} className="inline-flex items-center justify-center pointer-events-none"></span>;
         };
 
         const App = () => {
+            const [isLibReady, setIsLibReady] = useState(false);
             const [fbUser, setFbUser] = useState(null);
             const [selectedMember, setSelectedMember] = useState(localStorage.getItem('bey_selected_member') || null);
             const [ownedDb, setOwnedDb] = useState([]); 
             const [combos, setCombos] = useState([]);   
             const [activeTab, setActiveTab] = useState('catalog');
-            const [isLoading, setIsLoading] = useState(true);
+            const [isLoading, setIsLoading] = useState(false);
             
             const [isOwnedModalOpen, setIsOwnedModalOpen] = useState(false);
             const [isComboModalOpen, setIsComboModalOpen] = useState(false);
@@ -99,15 +112,31 @@
             const [ownedForm, setOwnedForm] = useState({ id: '', name: '', ratchet: '', bit: '', type: 'Attack' });
             const [comboForm, setComboForm] = useState({ id: 0, title: '', blade: '', ratchet: '', bit: '', note: '' });
 
-            // (1) 初始化 Firebase Auth - 修改錯誤處理以修復 custom-token-mismatch
+            // (0) 檢查 Firebase 函式庫是否已就緒
             useEffect(() => {
+                const checkInterval = setInterval(() => {
+                    if (window.FirebaseLib && window.lucide) {
+                        setIsLibReady(true);
+                        clearInterval(checkInterval);
+                    }
+                }, 100);
+                return () => clearInterval(checkInterval);
+            }, []);
+
+            // (1) 初始化 Firebase Auth
+            useEffect(() => {
+                if (!isLibReady) return;
+                const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } = window.FirebaseLib;
+                
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+
                 const initAuth = async () => {
                     try {
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             try {
                                 await signInWithCustomToken(auth, __initial_auth_token);
                             } catch (tokenErr) {
-                                // 如果 Custom Token 不匹配（例如專案不同），降級為匿名登入
                                 await signInAnonymously(auth);
                             }
                         } else {
@@ -120,16 +149,20 @@
                 initAuth();
                 const unsubscribe = onAuthStateChanged(auth, setFbUser);
                 return () => unsubscribe();
-            }, []);
+            }, [isLibReady]);
 
             // (2) 監聽 Firestore 資料
             useEffect(() => {
-                if (!fbUser || !selectedMember) {
+                if (!isLibReady || !fbUser || !selectedMember) {
                     setIsLoading(false);
                     return;
                 }
 
                 setIsLoading(true);
+                const { initializeApp, getFirestore, doc, onSnapshot, setDoc } = window.FirebaseLib;
+                const app = initializeApp(firebaseConfig);
+                const db = getFirestore(app);
+                
                 const memberDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'members', selectedMember);
 
                 const unsubscribe = onSnapshot(memberDocRef, (docSnap) => {
@@ -146,13 +179,14 @@
                 }, (error) => {
                     console.error("Firestore Error:", error);
                     setIsLoading(false);
+                    if (error.code === 'permission-denied') {
+                        setSelectedMember(null);
+                    }
                 });
 
                 localStorage.setItem('bey_selected_member', selectedMember);
                 return () => unsubscribe();
-            }, [fbUser, selectedMember]);
-
-            useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+            }, [isLibReady, fbUser, selectedMember]);
 
             const handleLogout = () => {
                 setSelectedMember(null);
@@ -160,7 +194,11 @@
             };
 
             const updateCloudData = async (newOwned, newCombos) => {
-                if (!fbUser || !selectedMember) return;
+                if (!isLibReady || !fbUser || !selectedMember) return;
+                const { initializeApp, getFirestore, doc, setDoc } = window.FirebaseLib;
+                const app = initializeApp(firebaseConfig);
+                const db = getFirestore(app);
+                
                 const memberDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'members', selectedMember);
                 await setDoc(memberDocRef, { 
                     owned: newOwned || ownedDb, 
@@ -187,7 +225,7 @@
             };
 
             const deleteOwned = async (id) => {
-                if (confirm('確定要移除這款陀螺紀錄嗎？')) {
+                if (window.confirm('確定要移除這款陀螺紀錄嗎？')) {
                     const newDb = ownedDb.filter(b => b.id !== id);
                     await updateCloudData(newDb, null);
                     setIsOwnedModalOpen(false);
@@ -213,7 +251,7 @@
             };
 
             const deleteCombo = async (id) => {
-                if (confirm('確定要刪除這組搭配嗎？')) {
+                if (window.confirm('確定要刪除這組搭配嗎？')) {
                     const newCombos = combos.filter(c => c.id !== id);
                     await updateCloudData(null, newCombos);
                     setIsComboModalOpen(false);
@@ -223,9 +261,9 @@
             const ownedParts = useMemo(() => {
                 const parts = { blades: new Set(), ratchets: new Set(), bits: new Set() };
                 ownedDb.forEach(bey => {
-                    parts.blades.add(bey.name);
-                    parts.ratchets.add(bey.ratchet);
-                    parts.bits.add(bey.bit);
+                    if (bey.name) parts.blades.add(bey.name);
+                    if (bey.ratchet) parts.ratchets.add(bey.ratchet);
+                    if (bey.bit) parts.bits.add(bey.bit);
                 });
                 return {
                     blades: Array.from(parts.blades).sort(),
@@ -243,11 +281,24 @@
                 return null;
             };
 
+            // --- 初期加載中 ---
+            if (!isLibReady) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-slate-950">
+                        <div className="text-center">
+                            <Icon name="loader-2" className="animate-spin text-blue-500 mx-auto mb-4" size={48} />
+                            <p className="text-slate-500 font-black tracking-widest uppercase text-xs">系統核心加載中...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            // --- 登入畫面 ---
             if (!fbUser || !selectedMember) {
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-6 relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_#dc262622_0%,_transparent_70%)] pointer-events-none"></div>
-                        <div className="mb-12 text-center relative z-10 animate-in zoom-in duration-500">
+                        <div className="mb-12 text-center relative z-10">
                             <h1 className="text-6xl md:text-8xl font-black italic text-transparent bg-clip-text bg-gradient-to-br from-red-600 via-white to-blue-600 uppercase mb-4 tracking-tighter drop-shadow-2xl">
                                 BEY-COMMANDER X
                             </h1>
@@ -257,7 +308,7 @@
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl relative z-10">
                             {USERS_LIST.map(user => (
-                                <button key={user} onClick={() => setSelectedMember(user)} className="login-btn p-8 bg-slate-900/80 backdrop-blur border-2 border-slate-800 rounded-lg text-3xl font-black hover:bg-slate-800 group transition-all">
+                                <button key={user} onClick={() => setSelectedMember(user)} className="login-btn p-8 bg-slate-900/80 backdrop-blur border-2 border-slate-800 rounded-lg text-3xl font-black hover:bg-slate-800 group">
                                     <span className="group-hover:text-red-500 transition-colors uppercase italic tracking-tighter">{user}</span>
                                     <div className="mt-2 text-[10px] text-slate-600 uppercase tracking-widest font-black">Authorized Access</div>
                                 </button>
@@ -271,7 +322,7 @@
                 <div className="min-h-screen pb-24 bg-slate-950">
                     <header className="p-6 md:p-10 max-w-7xl mx-auto">
                         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b-4 border-red-600 pb-8">
-                            <div className="animate-in slide-in-from-left duration-500">
+                            <div>
                                 <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-red-500 via-white to-blue-600 uppercase leading-none">
                                     BEY-COMMANDER X
                                 </h1>
@@ -311,9 +362,9 @@
                         ) : (
                             <>
                                 {activeTab === 'catalog' && (
-                                    <div className="space-y-8 animate-in fade-in duration-500">
+                                    <div className="space-y-8">
                                         <div className="flex justify-between items-center">
-                                            <h2 className="text-4xl font-black italic uppercase text-red-600 tracking-tighter">Purchased Items</h2>
+                                            <h2 className="text-4xl font-black italic uppercase text-red-600 tracking-tighter text-shadow">Purchased Items</h2>
                                             <button onClick={() => openOwnedModal()} className="bg-blue-600 px-6 py-3 font-black text-xs uppercase flex items-center gap-2 hover:bg-blue-500 transition-colors">
                                                 <Icon name="plus" size={16} /> 新增購入紀錄
                                             </button>
@@ -344,9 +395,9 @@
                                 )}
 
                                 {activeTab === 'combos' && (
-                                    <div className="space-y-8 animate-in fade-in duration-500">
+                                    <div className="space-y-8">
                                         <div className="flex justify-between items-center">
-                                            <h2 className="text-4xl font-black italic uppercase text-red-600 tracking-tighter">Combat Config</h2>
+                                            <h2 className="text-4xl font-black italic uppercase text-red-600 tracking-tighter text-shadow">Combat Config</h2>
                                             <button onClick={() => openComboModal()} className="bg-red-600 px-6 py-3 font-black text-xs uppercase flex items-center gap-2 hover:bg-red-500 transition-colors">
                                                 <Icon name="plus" size={16} /> 新增戰術搭配
                                             </button>
@@ -384,9 +435,9 @@
                                 )}
 
                                 {activeTab === 'parts' && (
-                                    <div className="bg-slate-900 border-2 border-slate-800 p-8 rounded-lg animate-in slide-in-from-right duration-500">
+                                    <div className="bg-slate-900 border-2 border-slate-800 p-8 rounded-lg">
                                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-                                            <h2 className="text-4xl font-black italic uppercase text-red-600 tracking-tighter">Inventory Core</h2>
+                                            <h2 className="text-4xl font-black italic uppercase text-shadow text-red-600 tracking-tighter">Inventory Core</h2>
                                             <div className="flex bg-black p-1 border border-slate-800 rounded-sm">
                                                 {[{ id: 'blade', label: '戰刃', icon: 'sword' }, { id: 'ratchet', label: '固鎖', icon: 'shield' }, { id: 'bit', label: '軸心', icon: 'zap' }].map(f => (
                                                     <button key={f.id} onClick={() => setPartsFilter(f.id)} className={`px-8 py-3 font-black text-xs transition-all uppercase tracking-widest ${partsFilter === f.id ? 'bg-red-600 text-white shadow-lg' : 'text-slate-600 hover:text-slate-300'}`}>
@@ -411,7 +462,7 @@
                                 )}
 
                                 {activeTab === 'ranking' && (
-                                    <div className="grid md:grid-cols-2 gap-12 animate-in slide-in-from-bottom duration-500">
+                                    <div className="grid md:grid-cols-2 gap-12">
                                         {['bits', 'ratchets'].map(cat => (
                                             <div key={cat} className="space-y-6">
                                                 <div className="flex items-center gap-4 mb-8">
@@ -434,9 +485,17 @@
                         )}
                     </main>
 
+                    {/* Floating Add Button */}
+                    <button 
+                        onClick={() => openOwnedModal()} 
+                        className="fixed bottom-8 right-8 w-16 h-16 bg-red-600 rounded-full flex items-center justify-center shadow-2xl border-4 border-white z-50 transform hover:scale-110 active:scale-95 transition-transform"
+                    >
+                        <Icon name="plus" size={32} className="text-white" />
+                    </button>
+
                     {/* Modals */}
                     {isOwnedModalOpen && (
-                        <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-in fade-in duration-300">
+                        <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
                             <div className="bg-slate-900 border-4 border-blue-600 p-10 w-full max-w-md shadow-2xl relative rounded-sm">
                                 <button onClick={() => setIsOwnedModalOpen(false)} className="absolute top-6 right-6 text-slate-600 hover:text-white transition-colors"><Icon name="x" size={28} /></button>
                                 <h2 className="text-3xl font-black italic mb-10 text-blue-600 uppercase tracking-tighter flex items-center gap-3"><Icon name="plus-square" /> 購入數據登錄</h2>
@@ -456,7 +515,7 @@
                     )}
 
                     {isComboModalOpen && (
-                        <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-in fade-in duration-300">
+                        <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
                             <div className="bg-slate-900 border-4 border-red-600 p-10 w-full max-w-lg shadow-2xl relative rounded-sm">
                                 <button onClick={() => setIsComboModalOpen(false)} className="absolute top-6 right-6 text-slate-600 hover:text-white transition-colors"><Icon name="x" size={28} /></button>
                                 <h2 className="text-3xl font-black italic mb-10 text-red-600 uppercase tracking-tighter flex items-center gap-3"><Icon name="crosshair" /> 戰術配置開發</h2>
