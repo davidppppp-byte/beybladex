@@ -4,36 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BEY-COMMANDER X - 雲端管理系統</title>
-    <!-- 導入 Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 導入 React & Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- 導入 Lucide 圖示 -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- 導入 Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        window.FirebaseLib = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, doc, setDoc, onSnapshot, updateDoc };
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query, where, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        window.FirebaseLib = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, doc, setDoc, onSnapshot, collection, query, where, deleteDoc };
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
         body { font-family: 'Noto Sans TC', sans-serif; overflow-x: hidden; background-color: #020617; color: #f8fafc; }
         .bey-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .bey-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px -5px rgba(220, 38, 38, 0.4); }
+        .bey-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px -10px rgba(220, 38, 38, 0.5); border-color: #ef4444; }
         .login-btn { transition: all 0.2s ease-out; }
         .login-btn:hover { transform: scale(1.02); border-color: #dc2626; background-color: #0f172a; }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #020617; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #dc2626; }
-        .animate-pulse-slow { animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        .text-shadow-red { text-shadow: 0 0 10px rgba(220, 38, 38, 0.5); }
-        .img-preview { object-fit: cover; width: 100%; height: 100%; border-radius: 4px; }
+        .text-shadow-red { text-shadow: 0 0 12px rgba(220, 38, 38, 0.6); }
+        .img-preview { object-fit: cover; width: 100%; height: 100%; border-radius: 6px; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .modal-animate { animation: fadeIn 0.2s ease-out forwards; }
     </style>
 </head>
 <body class="selection:bg-red-600 selection:text-white">
@@ -84,11 +80,7 @@
                     if (svg) {
                         svg.setAttribute('width', size);
                         svg.setAttribute('height', size);
-                        svg.style.width = size + 'px';
-                        svg.style.height = size + 'px';
-                        if (className) {
-                            className.split(' ').filter(c => c).forEach(c => svg.classList.add(c));
-                        }
+                        if (className) className.split(' ').filter(c => c).forEach(c => svg.classList.add(c));
                     }
                 }
             }, [name, size, className]);
@@ -107,7 +99,7 @@
             const [activeTab, setActiveTab] = useState('catalog');
             const [isLoading, setIsLoading] = useState(false);
             const [partsFilter, setPartsFilter] = useState('blade');
-            const [comboFilter, setComboFilter] = useState(null); // 新增：搭配區篩選零件
+            const [comboFilter, setComboFilter] = useState(null);
             
             const [isOwnedModalOpen, setIsOwnedModalOpen] = useState(false);
             const [isComboModalOpen, setIsComboModalOpen] = useState(false);
@@ -124,7 +116,7 @@
                         setIsLibReady(true);
                         clearInterval(check);
                     }
-                }, 50);
+                }, 100);
                 return () => clearInterval(check);
             }, []);
 
@@ -150,103 +142,89 @@
             useEffect(() => {
                 if (!isLibReady || !fbUser || !selectedMember) return;
                 setIsLoading(true);
-                const { initializeApp, getFirestore, doc, onSnapshot, setDoc } = window.FirebaseLib;
+                const { initializeApp, getFirestore, collection, query, where, onSnapshot } = window.FirebaseLib;
                 const dbInstance = getFirestore(initializeApp(firebaseConfig));
-                const docRef = doc(dbInstance, 'artifacts', appId, 'public', 'data', 'members', selectedMember);
+                
+                const qOwned = query(collection(dbInstance, 'artifacts', appId, 'public', 'data', 'owned'), where("user", "==", selectedMember));
+                const qCombos = query(collection(dbInstance, 'artifacts', appId, 'public', 'data', 'combos'), where("user", "==", selectedMember));
+                const qParts = query(collection(dbInstance, 'artifacts', appId, 'public', 'data', 'partNotes'), where("user", "==", selectedMember));
 
-                const unsub = onSnapshot(docRef, (s) => {
-                    if (s.exists()) {
-                        const d = s.data();
-                        setOwnedDb(d.owned || []);
-                        setCombos(d.combos || []);
-                        setPartData(d.partData || {});
-                    } else {
-                        setDoc(docRef, { owned: [], combos: [], partData: {} });
-                    }
-                    setIsLoading(false);
-                }, (e) => {
-                    console.error("Firestore Error", e);
-                    setIsLoading(false);
-                    if (e.code === 'permission-denied') setSelectedMember(null);
+                const unsubOwned = onSnapshot(qOwned, (snapshot) => {
+                    setOwnedDb(snapshot.docs.map(d => ({ fireId: d.id, ...d.data() })));
                 });
+                const unsubCombos = onSnapshot(qCombos, (snapshot) => {
+                    setCombos(snapshot.docs.map(d => ({ fireId: d.id, ...d.data() })));
+                });
+                const unsubParts = onSnapshot(qParts, (snapshot) => {
+                    const p = {};
+                    snapshot.docs.forEach(d => { p[d.data().name] = d.data(); });
+                    setPartData(p);
+                    setIsLoading(false);
+                });
+
                 localStorage.setItem('bey_selected_member', selectedMember);
-                return unsub;
+                return () => { unsubOwned(); unsubCombos(); unsubParts(); };
             }, [isLibReady, fbUser, selectedMember]);
 
-            const handleLogout = () => {
-                setSelectedMember(null);
-                localStorage.removeItem('bey_selected_member');
-            };
-
-            const updateCloud = async (newO, newC, newP) => {
-                if (!isLibReady || !fbUser || !selectedMember || isLoading) return;
-                
+            const updateItem = async (colName, id, data) => {
                 try {
                     const { initializeApp, getFirestore, doc, setDoc } = window.FirebaseLib;
                     const dbInstance = getFirestore(initializeApp(firebaseConfig));
-                    const docRef = doc(dbInstance, 'artifacts', appId, 'public', 'data', 'members', selectedMember);
-                    
-                    // 確保不會存入空資料造成覆蓋
-                    const dataToSave = { 
-                        owned: newO || ownedDb, 
-                        combos: newC || combos,
-                        partData: newP || partData,
-                        lastUpdated: Date.now()
-                    };
-
-                    await setDoc(docRef, dataToSave, { merge: true });
-                    console.log("Cloud Saved Successfully");
-                } catch (e) {
-                    console.error("Cloud Save Failed:", e);
-                    if (e.message.includes("too large")) {
-                        alert("儲存失敗：圖片檔案過大或過多，請嘗試刪除部分圖片再試一次。");
-                    } else {
-                        alert("同步發生錯誤，請檢查網路連線。");
-                    }
-                }
+                    const docId = `${selectedMember}_${id}`;
+                    await setDoc(doc(dbInstance, 'artifacts', appId, 'public', 'data', colName, docId), {
+                        ...data,
+                        user: selectedMember,
+                        updatedAt: Date.now()
+                    });
+                } catch (e) { console.error("Save Error", e); }
             };
 
-            const openComboModal = (item = null) => {
-                if (item) { setEditingItem(item.id); setComboForm(item); } 
-                else { setEditingItem(null); setComboForm({ id: Date.now(), title: '', blade: '', ratchet: '', bit: '', note: '' }); }
-                setIsComboModalOpen(true);
+            const deleteItem = async (colName, id) => {
+                const { initializeApp, getFirestore, doc, deleteDoc } = window.FirebaseLib;
+                const dbInstance = getFirestore(initializeApp(firebaseConfig));
+                await deleteDoc(doc(dbInstance, 'artifacts', appId, 'public', 'data', colName, `${selectedMember}_${id}`));
+            };
+
+            const handleImageUpload = (file, callback) => {
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX = 400;
+                        let w = img.width, h = img.height;
+                        if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } }
+                        else { if (h > MAX) { w *= MAX / h; h = MAX; } }
+                        canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        callback(canvas.toDataURL('image/jpeg', 0.6));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            };
+
+            const saveOwned = async () => {
+                if (!ownedForm.name) return;
+                const id = ownedForm.id || Date.now();
+                await updateItem('owned', id, { ...ownedForm, id });
+                setIsOwnedModalOpen(false);
             };
 
             const saveCombo = async () => {
                 if (!comboForm.title) return;
-                const next = editingItem ? combos.map(c => c.id === editingItem ? comboForm : c) : [...combos, comboForm];
-                await updateCloud(null, next, null);
+                const id = comboForm.id || Date.now();
+                await updateItem('combos', id, { ...comboForm, id });
                 setIsComboModalOpen(false);
             };
 
-            const deleteCombo = async (id) => {
-                if (window.confirm('確定要刪除這組搭配嗎？')) {
-                    await updateCloud(null, combos.filter(c => c.id !== id), null);
-                    setIsComboModalOpen(false);
-                }
-            };
-
-            const openPartNoteModal = (partName, category) => {
-                const data = partData[partName] || { note: '', image: '' };
-                setPartNoteForm({
-                    name: partName,
-                    category: category,
-                    note: data.note || '',
-                    image: data.image || ''
-                });
-                setIsPartNoteModalOpen(true);
-            };
-
             const savePartNote = async () => {
-                const nextData = { 
-                    ...partData, 
-                    [partNoteForm.name]: { note: partNoteForm.note, image: partNoteForm.image } 
-                };
-                await updateCloud(null, null, nextData);
+                await updateItem('partNotes', partNoteForm.name, partNoteForm);
                 setIsPartNoteModalOpen(false);
             };
 
-            const ownedParts = useMemo(() => {
+            const ownedPartsList = useMemo(() => {
                 const p = { blades: new Set(), ratchets: new Set(), bits: new Set() };
                 ownedDb.forEach(bey => {
                     if (bey.name) p.blades.add(bey.name);
@@ -260,49 +238,32 @@
                 };
             }, [ownedDb]);
 
-            const filteredCombos = useMemo(() => {
-                if (!comboFilter) return combos;
-                const target = comboFilter.toUpperCase();
-                return combos.filter(c => 
-                    (c.blade && c.blade.toUpperCase() === target) ||
-                    (c.ratchet && c.ratchet.toUpperCase() === target) ||
-                    (c.bit && c.bit.toUpperCase() === target)
-                );
-            }, [combos, comboFilter]);
-
             const getPartTier = (name, cat) => {
                 if (cat === 'blade' || !name) return null;
                 const ranks = RANKING_DATA[cat === 'ratchet' ? 'ratchets' : 'bits'];
-                const search = name.trim().toUpperCase();
-                for (const r of ranks) {
-                    if (r.items.toUpperCase().split(' ').includes(search)) return { tier: r.tier, color: r.color };
-                }
+                const s = name.trim().toUpperCase();
+                for (const r of ranks) if (r.items.toUpperCase().split(' ').includes(s)) return { tier: r.tier, color: r.color };
                 return null;
             };
 
             if (!isLibReady) return (
                 <div className="min-h-screen flex items-center justify-center bg-slate-950">
-                    <div className="text-center animate-pulse">
-                        <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                        <p className="text-slate-500 font-black tracking-widest text-[10px] uppercase">Booting System...</p>
-                    </div>
+                    <div className="text-center animate-pulse"><div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div><p className="text-slate-500 font-black tracking-widest text-[10px] uppercase">Booting System...</p></div>
                 </div>
             );
 
             if (!fbUser || !selectedMember) return (
                 <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-6 relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_#dc262615_0%,_transparent_70%)] pointer-events-none"></div>
-                    <div className="mb-12 text-center relative z-10 animate-in zoom-in duration-500">
+                    <div className="mb-12 text-center animate-in zoom-in duration-500">
                         <h1 className="text-6xl md:text-8xl font-black italic text-transparent bg-clip-text bg-gradient-to-br from-red-600 via-white to-blue-600 uppercase mb-4 tracking-tighter drop-shadow-2xl text-shadow-red">BEY-COMMANDER X</h1>
-                        <p className="text-slate-500 font-bold tracking-[0.3em] uppercase flex items-center justify-center gap-3">
-                            <Icon name="cloud" size={18} className="text-blue-500 animate-pulse-slow" /> 雲端管理核心
-                        </p>
+                        <p className="text-slate-500 font-bold tracking-[0.3em] uppercase flex items-center justify-center gap-3"><Icon name="cloud" size={18} className="text-blue-500" /> 雲端管理核心</p>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl relative z-10">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl">
                         {USERS_LIST.map(u => (
-                            <button key={u} onClick={() => setSelectedMember(u)} className="login-btn p-8 bg-slate-900 border-2 border-slate-800 rounded-lg text-3xl font-black hover:bg-slate-800">
-                                <span className="hover:text-red-500 transition-colors uppercase italic tracking-tighter font-black">{u}</span>
-                                <div className="mt-2 text-[10px] text-slate-600 uppercase tracking-widest font-black">Authorized Member</div>
+                            <button key={u} onClick={() => setSelectedMember(u)} className="login-btn p-8 bg-slate-900 border-2 border-slate-800 rounded-lg text-3xl font-black hover:bg-slate-800 transition-all group">
+                                <span className="group-hover:text-red-500 transition-colors uppercase italic tracking-tighter font-black">{u}</span>
+                                <div className="mt-2 text-[10px] text-slate-600 uppercase tracking-widest font-black font-black">Authorized Member</div>
                             </button>
                         ))}
                     </div>
@@ -318,44 +279,42 @@
                                 <p className="text-slate-400 mt-4 font-bold tracking-[0.3em] uppercase text-sm flex items-center gap-2 font-black"><Icon name="user" className="text-red-500" size={16} /> {selectedMember} 的戰鬥系統</p>
                             </div>
                             <div className="flex gap-4 items-center">
-                                <button onClick={handleLogout} className="bg-slate-900 border border-slate-700 px-4 py-2 text-[10px] font-black text-slate-500 hover:text-white uppercase transition-all">切換帳號</button>
-                                <div className="bg-slate-900 border-2 border-slate-700 px-6 py-3 rounded-sm shadow-[5px_5px_0px_#dc2626] font-black">
-                                    <div className="flex items-center gap-3 font-black"><Icon name="package" className="text-blue-500" /><span className="text-2xl">{ownedDb.length}</span><span className="text-[10px] text-slate-500 uppercase">OWNED</span></div>
+                                <button onClick={() => { setSelectedMember(null); localStorage.removeItem('bey_selected_member'); }} className="bg-slate-900 border border-slate-700 px-4 py-2 text-[10px] font-black text-slate-500 hover:text-white uppercase transition-all font-black">切換帳號</button>
+                                <div className="bg-slate-900 border-2 border-slate-700 px-6 py-3 rounded-sm shadow-[5px_5px_0px_#dc2626]">
+                                    <div className="flex items-center gap-3 font-black"><Icon name="package" className="text-blue-500" /><span className="text-2xl font-black">{ownedDb.length}</span><span className="text-[10px] text-slate-500 uppercase font-black">OWNED</span></div>
                                 </div>
                             </div>
                         </div>
                     </header>
 
-                    <nav className="max-w-7xl mx-auto px-6 mb-10 flex flex-wrap gap-3 sticky top-4 z-40 font-black">
+                    <nav className="max-w-7xl mx-auto px-6 mb-10 flex flex-wrap gap-3 sticky top-4 z-40">
                         {[{ id: 'catalog', label: '購入清單', i: 'shopping-cart' }, { id: 'combos', label: '搭配區', i: 'swords' }, { id: 'parts', label: '零件庫', i: 'zap' }, { id: 'ranking', label: '排行', i: 'trophy' }].map(t => (
-                            <button key={t.id} onClick={() => { setActiveTab(t.id); if(t.id !== 'combos') setComboFilter(null); }} className={`px-8 py-4 font-black transition-all flex items-center gap-2 ${activeTab === t.id ? 'bg-red-600 text-white shadow-[6px_6px_0px_white] -translate-y-1' : 'bg-slate-900 text-slate-500 border border-slate-800 hover:text-white'}`}>
+                            <button key={t.id} onClick={() => { setActiveTab(t.id); setComboFilter(null); }} className={`px-8 py-4 font-black transition-all flex items-center gap-2 ${activeTab === t.id ? 'bg-red-600 text-white shadow-[6px_6px_0px_white] -translate-y-1' : 'bg-slate-900 text-slate-500 border border-slate-800 hover:text-white'}`}>
                                 <Icon name={t.i} size={18} /> {t.label}
                             </button>
                         ))}
                     </nav>
 
-                    <main className="max-w-7xl mx-auto px-6 font-black">
+                    <main className="max-w-7xl mx-auto px-6">
                         {isLoading ? (
-                            <div className="py-40 text-center animate-pulse font-black"><Icon name="loader-2" size={48} className="text-red-600 animate-spin mb-4 mx-auto" /><p className="text-slate-600 font-black uppercase italic tracking-widest font-black">同步雲端資料中...</p></div>
+                            <div className="py-40 text-center animate-pulse font-black font-black"><Icon name="loader-2" size={48} className="text-red-600 animate-spin mb-4 mx-auto" /><p className="text-slate-600 font-black uppercase italic tracking-widest">同步雲端資料中...</p></div>
                         ) : (
                             <>
                                 {activeTab === 'catalog' && (
-                                    <div className="space-y-8 animate-in fade-in duration-300 font-black">
-                                        <div className="flex justify-between items-center"><h2 className="text-4xl font-black italic uppercase text-red-600 tracking-tighter text-shadow-red">Purchased Items</h2><button onClick={() => openOwnedModal()} className="bg-blue-600 px-6 py-3 font-black text-xs uppercase flex items-center gap-2 hover:bg-blue-500 transition-all"><Icon name="plus" size={16} /> 新增購入</button></div>
+                                    <div className="space-y-8 animate-in fade-in duration-300">
+                                        <div className="flex justify-between items-center"><h2 className="text-4xl font-black italic uppercase text-red-600 tracking-tighter text-shadow-red font-black">Purchased Items</h2><button onClick={() => { setEditingItem(null); setOwnedForm({ id: '', name: '', ratchet: '', bit: '', type: 'Attack', image: '' }); setIsOwnedModalOpen(true); }} className="bg-blue-600 px-6 py-3 font-black text-xs uppercase flex items-center gap-2 hover:bg-blue-500 font-black"><Icon name="plus" size={16} /> 新增購入</button></div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                            {ownedDb.length === 0 ? <div className="col-span-full py-20 text-center border-4 border-dashed border-slate-900"><Icon name="shopping-bag" size={48} className="mx-auto text-slate-900 mb-4 font-black" /><p className="text-slate-700 font-black text-xl uppercase italic tracking-widest font-black">目前無資料紀錄</p></div> : 
-                                            ownedDb.map(b => (
-                                                <div key={b.id} className="bey-card border-2 border-red-600 bg-slate-900 rounded-lg relative overflow-hidden flex flex-col font-black">
+                                            {ownedDb.map(b => (
+                                                <div key={b.fireId} className="bey-card border-2 border-red-600 bg-slate-900 rounded-lg overflow-hidden flex flex-col relative font-black">
                                                     <div className="h-48 bg-black relative">
                                                         {b.image ? <img src={b.image} className="img-preview" /> : <div className="w-full h-full flex items-center justify-center text-slate-800"><Icon name="image" size={48} /></div>}
-                                                        <div className="absolute top-2 left-2 flex gap-2"><span className="bg-blue-600/90 backdrop-blur px-2 py-0.5 text-[8px] font-black rounded uppercase">Entry-Logged</span></div>
-                                                        <div className="absolute top-2 right-2"><button onClick={() => openOwnedModal(b)} className="text-white hover:text-red-500 transition-colors bg-black/60 p-1.5 rounded-full backdrop-blur border border-white/20"><Icon name="edit-2" size={16} /></button></div>
+                                                        <div className="absolute top-2 right-2"><button onClick={() => { setEditingItem(b.id); setOwnedForm(b); setIsOwnedModalOpen(true); }} className="text-white hover:text-red-500 bg-black/60 p-1.5 rounded-full border border-white/20"><Icon name="edit-2" size={16} /></button></div>
                                                     </div>
                                                     <div className="p-6">
-                                                        <h3 className="text-2xl font-black mb-4 truncate uppercase italic tracking-tight text-white font-black">{b.name}</h3>
-                                                        <div className="bg-black/60 p-4 space-y-2 text-[10px] font-black text-slate-500 rounded font-mono font-black">
-                                                            <div className="flex justify-between items-center font-black"><span>RATCHET</span><span className="text-white font-black">{b.ratchet}</span></div>
-                                                            <div className="flex justify-between items-center font-black"><span>BIT</span><span className="text-white font-black">{b.bit}</span></div>
+                                                        <h3 className="text-2xl font-black mb-4 truncate uppercase italic text-white font-black">{b.name}</h3>
+                                                        <div className="bg-black/60 p-4 space-y-2 text-[10px] font-black text-slate-500 rounded font-mono">
+                                                            <div className="flex justify-between font-black"><span>RATCHET</span><span className="text-white font-black">{b.ratchet}</span></div>
+                                                            <div className="flex justify-between font-black"><span>BIT</span><span className="text-white font-black">{b.bit}</span></div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -363,45 +322,29 @@
                                         </div>
                                     </div>
                                 )}
-
+                                
                                 {activeTab === 'combos' && (
-                                    <div className="space-y-8 animate-in fade-in duration-300 font-black font-black">
-                                        <div className="flex justify-between items-center font-black">
+                                    <div className="space-y-8 animate-in fade-in duration-300">
+                                        <div className="flex justify-between items-center">
                                             <div className="flex items-center gap-4">
                                                 <h2 className="text-4xl font-black italic uppercase text-red-600 tracking-tighter text-shadow-red font-black">Combat Config</h2>
-                                                {comboFilter && (
-                                                    <div className="flex items-center gap-2 bg-red-600/20 border border-red-600/40 px-3 py-1.5 rounded text-[10px] font-black">
-                                                        <Icon name="filter" size={12} className="text-red-500" />
-                                                        <span>正在篩選零件: <span className="text-white ml-1">{comboFilter}</span></span>
-                                                        <button onClick={() => setComboFilter(null)} className="ml-2 hover:text-white text-red-500"><Icon name="x" size={12} /></button>
-                                                    </div>
-                                                )}
+                                                {comboFilter && <div className="bg-red-600/20 border border-red-600/40 px-3 py-1.5 rounded text-[10px] font-black">正在篩選: {comboFilter} <button onClick={() => setComboFilter(null)} className="ml-2 font-black">X</button></div>}
                                             </div>
-                                            <div className="flex gap-2">
-                                                {comboFilter && <button onClick={() => setComboFilter(null)} className="bg-slate-800 px-4 py-3 font-black text-xs uppercase hover:bg-slate-700 transition-all font-black">顯示全部</button>}
-                                                <button onClick={() => openComboModal()} className="bg-red-600 px-6 py-3 font-black text-xs uppercase flex items-center gap-2 hover:bg-red-500 transition-all font-black"><Icon name="plus" size={16} /> 新增戰術</button>
-                                            </div>
+                                            <button onClick={() => { setEditingItem(null); setComboForm({ id: Date.now(), title: '', blade: '', ratchet: '', bit: '', note: '' }); setIsComboModalOpen(true); }} className="bg-red-600 px-6 py-3 font-black text-xs uppercase flex items-center gap-2 hover:bg-red-500 font-black"><Icon name="plus" size={16} /> 新增戰術</button>
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 font-black font-black">
-                                            {filteredCombos.length === 0 ? <div className="col-span-full py-20 text-center border-4 border-dashed border-slate-900 rounded-lg"><Icon name="swords" size={48} className="mx-auto text-slate-900 mb-4" /><p className="text-slate-700 font-black text-xl italic uppercase font-black">目前無匹配戰術</p></div> : 
-                                            filteredCombos.map(c => (
-                                                <div key={c.id} className="p-8 bg-slate-900 border-2 border-slate-800 rounded-lg hover:border-red-600 transition-all shadow-inner relative font-black">
-                                                    <div className="flex justify-between items-start mb-6">
-                                                        <h3 className="text-3xl font-black text-red-600 italic uppercase truncate tracking-tighter font-black">{c.title}</h3>
-                                                        <button onClick={() => openComboModal(c)} className="text-slate-400 hover:text-white transition-colors bg-slate-800 p-2 rounded-sm"><Icon name="settings" size={24} /></button>
-                                                    </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            {(comboFilter ? combos.filter(c => Object.values(c).some(v => typeof v === 'string' && v.toUpperCase() === comboFilter.toUpperCase())) : combos).map(c => (
+                                                <div key={c.fireId} className="p-8 bg-slate-900 border-2 border-slate-800 rounded-lg hover:border-red-600 transition-all shadow-inner relative font-black font-black">
+                                                    <div className="flex justify-between items-start mb-6 font-black"><h3 className="text-3xl font-black text-red-600 italic uppercase truncate tracking-tighter font-black">{c.title}</h3><button onClick={() => { setEditingItem(c.id); setComboForm(c); setIsComboModalOpen(true); }} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-sm"><Icon name="settings" size={24} /></button></div>
                                                     <div className="grid grid-cols-3 gap-3 mb-8 font-black font-black">
                                                         {['Blade', 'Ratchet', 'Bit'].map(p => (
-                                                            <div key={p} className="text-center font-black">
-                                                                <div className="text-[9px] font-black text-slate-600 mb-1 uppercase tracking-widest font-black">{p}</div>
-                                                                <div className={`bg-black p-3 font-black text-[11px] h-12 flex items-center justify-center border rounded-sm ${c[p.toLowerCase()]?.toUpperCase() === comboFilter?.toUpperCase() ? 'border-red-500 text-red-500 shadow-[0_0_10px_#dc262644]' : 'border-slate-800 text-white'}`}>{c[p.toLowerCase()]}</div>
+                                                            <div key={p} className="text-center font-black font-black">
+                                                                <div className="text-[9px] font-black text-slate-600 mb-1 uppercase font-black">{p}</div>
+                                                                <div className={`bg-black p-3 font-black text-[11px] h-12 flex items-center justify-center border rounded-sm font-black ${c[p.toLowerCase()]?.toUpperCase() === comboFilter?.toUpperCase() ? 'border-red-500 text-red-500' : 'border-slate-800 text-white'}`}>{c[p.toLowerCase()]}</div>
                                                             </div>
                                                         ))}
                                                     </div>
-                                                    <div className="bg-slate-950 p-5 rounded-sm border-l-4 border-red-600 font-black font-black">
-                                                        <div className="text-[9px] font-black text-red-700 mb-2 uppercase font-black font-black font-black">戰術分析 / 備註</div>
-                                                        <p className="text-slate-400 text-xs leading-relaxed font-bold italic font-black">{c.note || "無備註"}</p>
-                                                    </div>
+                                                    <div className="bg-slate-950 p-5 rounded-sm border-l-4 border-red-600 font-black"><p className="text-slate-400 text-xs font-bold italic font-black font-black">{c.note || "無備註"}</p></div>
                                                 </div>
                                             ))}
                                         </div>
@@ -409,44 +352,29 @@
                                 )}
 
                                 {activeTab === 'parts' && (
-                                    <div className="bg-slate-900 border-2 border-slate-800 p-8 rounded-lg animate-in slide-in-from-right duration-500 font-black">
+                                    <div className="bg-slate-900 border-2 border-slate-800 p-8 rounded-lg animate-in slide-in-from-right duration-500 font-black font-black">
                                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 font-black">
                                             <h2 className="text-4xl font-black italic uppercase text-red-600 tracking-tighter text-shadow-red font-black">Inventory Core</h2>
-                                            <div className="flex bg-black p-1 border border-slate-800 rounded-sm font-black font-black">
+                                            <div className="flex bg-black p-1 border border-slate-800 rounded-sm font-black">
                                                 {[{ id: 'blade', l: '戰刃', i: 'sword' }, { id: 'ratchet', l: '固鎖', i: 'shield' }, { id: 'bit', l: '軸心', i: 'zap' }].map(f => (
-                                                    <button key={f.id} onClick={() => setPartsFilter(f.id)} className={`px-8 py-3 font-black text-xs transition-all uppercase tracking-widest ${partsFilter === f.id ? 'bg-red-600 text-white shadow-lg' : 'text-slate-600 hover:text-slate-300'}`}>{f.l}</button>
+                                                    <button key={f.id} onClick={() => setPartsFilter(f.id)} className={`px-8 py-3 font-black text-xs transition-all uppercase tracking-widest font-black ${partsFilter === f.id ? 'bg-red-600 text-white font-black' : 'text-slate-600 hover:text-slate-300 font-black'}`}>{f.l}</button>
                                                 ))}
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 font-black font-black font-black font-black">
-                                            {(partsFilter === 'blade' ? ownedParts.blades : (partsFilter === 'ratchet' ? ownedParts.ratchets : ownedParts.bits)).map(p => {
+                                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 font-black font-black">
+                                            {(partsFilter === 'blade' ? ownedPartsList.blades : (partsFilter === 'ratchet' ? ownedPartsList.ratchets : ownedPartsList.bits)).map(p => {
                                                 const t = getPartTier(p, partsFilter);
                                                 const data = partData[p] || { note: '', image: '' };
                                                 return (
-                                                    <div 
-                                                        key={p} 
-                                                        onClick={() => openPartNoteModal(p, partsFilter)}
-                                                        className="bg-slate-950 border-2 border-slate-800 cursor-pointer hover:border-red-600 transition-all transform hover:scale-105 rounded-sm group relative flex flex-col overflow-hidden min-h-[220px] font-black font-black font-black font-black"
-                                                    >
+                                                    <div key={p} onClick={() => { setPartNoteForm({ name: p, category: partsFilter, note: data.note || '', image: data.image || '' }); setIsPartNoteModalOpen(true); }} className="bg-slate-950 border-2 border-slate-800 cursor-pointer hover:border-red-600 transition-all transform hover:scale-105 rounded-sm group relative flex flex-col overflow-hidden min-h-[220px] font-black">
                                                         <div className="h-24 bg-black/40 relative font-black">
-                                                            {data.image ? <img src={data.image} className="img-preview" /> : <div className="w-full h-full flex items-center justify-center text-slate-800 group-hover:text-red-900 transition-colors"><Icon name={partsFilter === 'bit' ? 'zap' : (partsFilter === 'ratchet' ? 'shield' : 'sword')} size={32} /></div>}
+                                                            {data.image ? <img src={data.image} className="img-preview" /> : <div className="w-full h-full flex items-center justify-center text-slate-800"><Icon name={partsFilter === 'bit' ? 'zap' : (partsFilter === 'ratchet' ? 'shield' : 'sword')} size={32} /></div>}
                                                             {t && <div className={`absolute bottom-2 left-2 px-2 py-0.5 text-[8px] font-black rounded-sm shadow-xl ${t.color} italic font-black`}>{t.tier}</div>}
                                                         </div>
-                                                        <div className="p-4 flex-grow flex flex-col font-black font-black">
-                                                            <div className={`font-black text-white mb-2 ${partsFilter !== 'blade' ? 'font-mono text-xl' : 'text-xs tracking-tight'} group-hover:text-red-500 transition-colors truncate font-black`}>{p}</div>
-                                                            <div className="bg-black/50 p-2 rounded text-[9px] text-slate-400 font-bold italic line-clamp-2 min-h-[30px] flex items-center justify-center font-black mb-3">
-                                                                {data.note || "點擊上傳圖示"}
-                                                            </div>
-                                                            {/* 新增的戰術跳轉按鈕 */}
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); setComboFilter(p); setActiveTab('combos'); }}
-                                                                className="mt-auto w-full bg-red-600/10 border border-red-600/40 text-red-500 py-1.5 rounded text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-1 font-black font-black font-black font-black"
-                                                            >
-                                                                <Icon name="swords" size={10} /> 戰術分析
-                                                            </button>
-                                                        </div>
-                                                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity font-black">
-                                                            <Icon name="camera" size={14} className="text-red-600" />
+                                                        <div className="p-4 flex-grow flex flex-col font-black">
+                                                            <div className={`font-black text-white mb-2 ${partsFilter !== 'blade' ? 'font-mono text-xl' : 'text-xs'} truncate font-black font-black`}>{p}</div>
+                                                            <div className="bg-black/50 p-2 rounded text-[9px] text-slate-400 italic line-clamp-2 min-h-[30px] flex items-center justify-center font-black">{data.note || "點擊編輯"}</div>
+                                                            <button onClick={(e) => { e.stopPropagation(); setComboFilter(p); setActiveTab('combos'); }} className="mt-3 w-full bg-red-600/10 border border-red-600/40 text-red-500 py-1.5 rounded text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all font-black">戰術分析</button>
                                                         </div>
                                                     </div>
                                                 );
@@ -454,17 +382,17 @@
                                         </div>
                                     </div>
                                 )}
-
+                                
                                 {activeTab === 'ranking' && (
-                                    <div className="grid md:grid-cols-2 gap-12 animate-in slide-in-from-bottom duration-500 font-black font-black font-black font-black">
+                                    <div className="grid md:grid-cols-2 gap-12 animate-in slide-in-from-bottom duration-500 font-black font-black">
                                         {['bits', 'ratchets'].map(cat => (
-                                            <div key={cat} className="space-y-6 font-black">
-                                                <div className="flex items-center gap-4 mb-8 font-black"><Icon name={cat === 'bits' ? 'zap' : 'shield-half'} className={cat === 'bits' ? 'text-yellow-500' : 'text-blue-500'} size={40} /><h2 className="text-5xl font-black italic uppercase tracking-tighter text-shadow-red font-black">{cat === 'bits' ? '軸心排行' : '固鎖排行'}</h2></div>
-                                                <div className="space-y-3 font-black">
+                                            <div key={cat} className="space-y-6 font-black font-black">
+                                                <div className="flex items-center gap-4 mb-8 font-black font-black"><Icon name={cat === 'bits' ? 'zap' : 'shield-half'} className={cat === 'bits' ? 'text-yellow-500' : 'text-blue-500'} size={40} /><h2 className="text-5xl font-black italic uppercase tracking-tighter text-shadow-red font-black font-black font-black">{cat === 'bits' ? '軸心排行' : '固鎖排行'}</h2></div>
+                                                <div className="space-y-3 font-black font-black font-black font-black">
                                                     {RANKING_DATA[cat].map(r => (
                                                         <div key={r.tier} className="flex gap-4 group font-black">
-                                                            <div className={`w-14 h-14 shrink-0 flex items-center justify-center font-black text-xl italic ${r.color} shadow-lg rounded-sm transform group-hover:skew-x-6 transition-transform font-black`}>{r.tier}</div>
-                                                            <div className="bg-slate-900 border border-slate-800 p-5 flex-grow font-mono font-black text-slate-300 group-hover:border-slate-500 transition-colors flex items-center tracking-wider font-black font-black">{r.items}</div>
+                                                            <div className={`w-14 h-14 shrink-0 flex items-center justify-center font-black text-xl italic ${r.color} shadow-lg rounded-sm transform group-hover:skew-x-6 transition-transform font-black font-black`}>{r.tier}</div>
+                                                            <div className="bg-slate-900 border border-slate-800 p-5 flex-grow font-mono font-black text-slate-300 group-hover:border-slate-500 transition-colors flex items-center tracking-wider font-black">{r.items}</div>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -476,66 +404,57 @@
                         )}
                     </main>
 
-                    {/* Floating FAB */}
-                    <button onClick={() => openOwnedModal()} className="fixed bottom-8 right-8 w-16 h-16 bg-red-600 rounded-full flex items-center justify-center shadow-[0_0_25px_rgba(220,38,38,0.5)] border-4 border-white z-50 transform hover:scale-110 active:scale-95 transition-all font-black">
-                        <Icon name="plus" size={32} className="text-white" />
-                    </button>
-
+                    {}
                     {isOwnedModalOpen && (
-                        <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-in fade-in duration-300 font-black">
+                        <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-[100] font-black modal-animate">
                             <div className="bg-slate-900 border-4 border-blue-600 p-10 w-full max-w-md shadow-2xl relative rounded-sm font-black">
-                                <button onClick={() => setIsOwnedModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white transition-all bg-slate-800/80 p-1.5 rounded-full border border-slate-700 hover:border-red-600 z-[110] flex items-center justify-center shadow-lg font-black"><Icon name="x" size={24} /></button>
+                                <button onClick={() => setIsOwnedModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white transition-all bg-slate-800/80 p-1.5 rounded-full border border-slate-700 hover:border-red-600 z-[110] flex items-center justify-center shadow-lg font-black font-black"><Icon name="x" size={24} /></button>
                                 <h2 className="text-3xl font-black italic mb-6 text-blue-600 uppercase tracking-tighter flex items-center gap-3 font-black"><Icon name="plus-square" /> 購入數據登錄</h2>
                                 <div className="space-y-6 font-black">
-                                    <div className="relative h-40 bg-black border-2 border-dashed border-slate-700 rounded-lg overflow-hidden group">
-                                        {ownedForm.image ? <img src={ownedForm.image} className="img-preview" /> : <div className="w-full h-full flex flex-col items-center justify-center text-slate-600"><Icon name="image-plus" size={32} className="mb-2" /><span className="text-[10px] font-black uppercase font-black">Upload Photo</span></div>}
+                                    <div className="relative h-40 bg-black border-2 border-dashed border-slate-700 rounded-lg overflow-hidden group font-black">
+                                        {ownedForm.image ? <img src={ownedForm.image} className="img-preview" /> : <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 font-black"><Icon name="image-plus" size={32} className="mb-2" /><span className="text-[10px] font-black uppercase font-black">Upload Photo</span></div>}
                                         <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleImageUpload(e.target.files[0], (data) => setOwnedForm({...ownedForm, image: data}))} />
-                                        {ownedForm.image && <button onClick={(e) => { e.stopPropagation(); setOwnedForm({...ownedForm, image: ''}) }} className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full"><Icon name="trash-2" size={12} /></button>}
                                     </div>
-                                    <input placeholder="陀螺名稱" className="w-full bg-black border-2 border-slate-800 p-4 text-white font-black outline-none focus:border-blue-600 uppercase font-black" value={ownedForm.name} onChange={e => setOwnedForm({...ownedForm, name: e.target.value})} />
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <input placeholder="固鎖" className="w-full bg-black border-2 border-slate-800 p-4 text-white font-black outline-none font-mono focus:border-blue-600 uppercase font-black" value={ownedForm.ratchet} onChange={e => setOwnedForm({...ownedForm, ratchet: e.target.value})} />
-                                        <input placeholder="軸心" className="w-full bg-black border-2 border-slate-800 p-4 text-white font-black outline-none font-mono focus:border-blue-600 uppercase font-black" value={ownedForm.bit} onChange={e => setOwnedForm({...ownedForm, bit: e.target.value})} />
+                                    <input placeholder="陀螺名稱" className="w-full bg-black border-2 border-slate-800 p-4 text-white font-black outline-none focus:border-blue-600 uppercase font-black font-black font-black" value={ownedForm.name} onChange={e => setOwnedForm({...ownedForm, name: e.target.value})} />
+                                    <div className="grid grid-cols-2 gap-4 font-black">
+                                        <input placeholder="固鎖" className="w-full bg-black border-2 border-slate-800 p-4 text-white font-black outline-none font-mono focus:border-blue-600 uppercase font-black font-black" value={ownedForm.ratchet} onChange={e => setOwnedForm({...ownedForm, ratchet: e.target.value})} />
+                                        <input placeholder="軸心" className="w-full bg-black border-2 border-slate-800 p-4 text-white font-black outline-none font-mono focus:border-blue-600 uppercase font-black font-black" value={ownedForm.bit} onChange={e => setOwnedForm({...ownedForm, bit: e.target.value})} />
                                     </div>
-                                    <div className="flex gap-4 pt-6 font-black">{editingItem && <button onClick={() => deleteOwned(editingItem)} className="flex-1 bg-slate-800 py-4 font-black text-red-600 uppercase text-xs hover:bg-red-950/20 transition-all border border-red-900/30">刪除</button>}<button onClick={saveOwned} className="flex-[2] bg-blue-600 py-4 font-black text-white hover:bg-blue-500 uppercase text-xs tracking-widest shadow-lg transition-all">儲存雲端數據</button></div>
+                                    <div className="flex gap-4 pt-6 font-black font-black">{editingItem && <button onClick={() => { deleteItem('owned', editingItem); setIsOwnedModalOpen(false); }} className="flex-1 bg-slate-800 py-4 font-black text-red-600 uppercase text-xs border border-red-900/30 font-black">刪除</button>}<button onClick={saveOwned} className="flex-[2] bg-blue-600 py-4 font-black text-white hover:bg-blue-500 uppercase text-xs tracking-widest shadow-lg transition-all font-black">儲存雲端數據</button></div>
                                 </div>
                             </div>
                         </div>
                     )}
 
                     {isComboModalOpen && (
-                        <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-in fade-in duration-300 font-black">
-                            <div className="bg-slate-900 border-4 border-red-600 p-10 w-full max-w-lg shadow-2xl relative rounded-sm font-black">
-                                <button onClick={() => setIsComboModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white transition-all bg-slate-800/80 p-1.5 rounded-full border border-slate-700 hover:border-red-600 z-[110] flex items-center justify-center shadow-lg font-black"><Icon name="x" size={24} /></button>
+                        <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-[100] font-black modal-animate">
+                            <div className="bg-slate-900 border-4 border-red-600 p-10 w-full max-w-lg shadow-2xl relative rounded-sm font-black font-black font-black">
+                                <button onClick={() => setIsComboModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white transition-all bg-slate-800/80 p-1.5 rounded-full border border-slate-700 hover:border-red-600 z-[110] flex items-center justify-center shadow-lg font-black font-black font-black font-black"><Icon name="x" size={24} /></button>
                                 <h2 className="text-3xl font-black italic mb-10 text-red-600 uppercase tracking-tighter flex items-center gap-3 font-black"><Icon name="crosshair" /> 戰術配置開發</h2>
-                                <div className="space-y-6 font-black font-black">
-                                    <input placeholder="搭配名稱" className="w-full bg-black border-2 border-slate-800 p-4 text-white font-black outline-none focus:border-red-600 uppercase font-black" value={comboForm.title} onChange={e => setComboForm({...comboForm, title: e.target.value})} />
-                                    <div className="grid grid-cols-3 gap-3">{['Blade', 'Ratchet', 'Bit'].map(p => (<input key={p} placeholder={p} className="bg-black border-2 border-slate-800 p-3 text-xs text-white font-black focus:border-red-600 outline-none uppercase" value={comboForm[p.toLowerCase()]} onChange={e => setComboForm({...comboForm, [p.toLowerCase()]: e.target.value})} />))}</div>
-                                    <textarea placeholder="戰術備註..." className="w-full bg-black border-2 border-slate-800 p-4 text-white text-xs h-32 resize-none outline-none focus:border-red-600 font-bold" value={comboForm.note} onChange={e => setComboForm({...comboForm, note: e.target.value})}></textarea>
-                                    <div className="flex gap-4 pt-4 font-black">{editingItem && <button onClick={() => deleteCombo(editingItem)} className="flex-1 bg-slate-800 py-4 font-black text-red-600 uppercase text-xs hover:bg-red-950/20 transition-all border border-red-900/30">刪除</button>}<button onClick={saveCombo} className="flex-[2] bg-red-600 py-4 font-black text-white hover:bg-red-500 uppercase text-xs tracking-widest shadow-lg transition-all">部署戰術系統</button></div>
+                                <div className="space-y-6 font-black font-black font-black font-black">
+                                    <input placeholder="搭配名稱" className="w-full bg-black border-2 border-slate-800 p-4 text-white font-black outline-none focus:border-red-600 uppercase font-black font-black font-black" value={comboForm.title} onChange={e => setComboForm({...comboForm, title: e.target.value})} />
+                                    <div className="grid grid-cols-3 gap-3 font-black font-black font-black">{['Blade', 'Ratchet', 'Bit'].map(p => (<input key={p} placeholder={p} className="bg-black border-2 border-slate-800 p-3 text-xs text-white font-black focus:border-red-600 outline-none uppercase font-black" value={comboForm[p.toLowerCase()]} onChange={e => setComboForm({...comboForm, [p.toLowerCase()]: e.target.value})} />))}</div>
+                                    <textarea placeholder="戰術備註..." className="w-full bg-black border-2 border-slate-800 p-4 text-white text-xs h-32 resize-none outline-none focus:border-red-600 font-bold font-black" value={comboForm.note} onChange={e => setComboForm({...comboForm, note: e.target.value})}></textarea>
+                                    <div className="flex gap-4 pt-4 font-black font-black">{editingItem && <button onClick={() => { deleteItem('combos', editingItem); setIsComboModalOpen(false); }} className="flex-1 bg-slate-800 py-4 font-black text-red-600 uppercase text-xs border border-red-900/30 font-black">刪除</button>}<button onClick={saveCombo} className="flex-[2] bg-red-600 py-4 font-black text-white hover:bg-red-500 uppercase text-xs tracking-widest shadow-lg transition-all font-black">部署戰術</button></div>
                                 </div>
                             </div>
                         </div>
                     )}
 
                     {isPartNoteModalOpen && (
-                        <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-in fade-in duration-300 font-black">
-                            <div className="bg-slate-900 border-4 border-yellow-600 p-10 w-full max-w-md shadow-2xl relative rounded-sm font-black">
-                                <button onClick={() => setIsPartNoteModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white transition-all bg-slate-800/80 p-1.5 rounded-full border border-slate-700 hover:border-yellow-600 z-[110] flex items-center justify-center shadow-lg"><Icon name="x" size={24} /></button>
-                                <h2 className="text-3xl font-black italic mb-2 text-yellow-600 uppercase tracking-tighter font-black font-black">零件效能與圖鑑</h2>
+                        <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-[100] font-black modal-animate">
+                            <div className="bg-slate-900 border-4 border-yellow-600 p-10 w-full max-w-md shadow-2xl relative rounded-sm font-black font-black font-black font-black font-black">
+                                <button onClick={() => setIsPartNoteModalOpen(false)} className="absolute top-6 right-6 text-slate-400 hover:text-white transition-all bg-slate-800/80 p-1.5 rounded-full border border-slate-700 hover:border-yellow-600 z-[110] flex items-center justify-center shadow-lg font-black font-black font-black font-black font-black font-black"><Icon name="x" size={24} /></button>
+                                <h2 className="text-3xl font-black italic mb-2 text-yellow-600 uppercase tracking-tighter font-black font-black font-black font-black font-black font-black">零件效能與圖鑑</h2>
                                 <p className="text-slate-500 text-xs font-black uppercase mb-6 tracking-widest font-black">Editing Database for: {partNoteForm.name}</p>
-                                <div className="space-y-6 font-black font-black">
-                                    <div className="relative h-48 bg-black border-2 border-dashed border-slate-700 rounded-lg overflow-hidden group">
-                                        {partNoteForm.image ? <img src={partNoteForm.image} className="img-preview" /> : <div className="w-full h-full flex flex-col items-center justify-center text-slate-600"><Icon name="camera" size={32} className="mb-2" /><span className="text-[10px] font-black uppercase">Upload Photo</span></div>}
+                                <div className="space-y-6 font-black font-black font-black">
+                                    <div className="relative h-48 bg-black border-2 border-dashed border-slate-700 rounded-lg overflow-hidden group font-black font-black">
+                                        {partNoteForm.image ? <img src={partNoteForm.image} className="img-preview" /> : <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 font-black"><Icon name="camera" size={32} className="mb-2" /><span className="text-[10px] font-black uppercase font-black">Upload Photo</span></div>}
                                         <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleImageUpload(e.target.files[0], (data) => setPartNoteForm({...partNoteForm, image: data}))} />
-                                        {partNoteForm.image && <button onClick={(e) => { e.stopPropagation(); setPartNoteForm({...partNoteForm, image: ''}) }} className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full"><Icon name="trash-2" size={12} /></button>}
                                     </div>
-                                    <div className="bg-black/50 p-4 border-l-4 border-yellow-600">
-                                        <div className="text-[10px] font-black text-yellow-700 uppercase mb-1 font-black">Identified Part</div>
-                                        <div className="text-2xl font-black text-white font-mono">{partNoteForm.name}</div>
-                                    </div>
+                                    <div className="bg-black/50 p-4 border-l-4 border-yellow-600 font-black"><div className="text-[10px] font-black text-yellow-700 uppercase mb-1 font-black">Identified Part</div><div className="text-2xl font-black text-white font-mono font-black font-black">{partNoteForm.name}</div></div>
                                     <textarea placeholder="心得紀錄..." className="w-full bg-black border-2 border-slate-800 p-4 text-white text-sm h-32 resize-none outline-none focus:border-yellow-600 font-bold font-black" value={partNoteForm.note} onChange={e => setPartNoteForm({...partNoteForm, note: e.target.value})}></textarea>
-                                    <button onClick={savePartNote} className="w-full bg-yellow-600 py-4 font-black text-black hover:bg-yellow-500 uppercase text-xs tracking-widest shadow-lg transition-all font-black font-black font-black font-black">更新雲端數據</button>
+                                    <button onClick={savePartNote} className="w-full bg-yellow-600 py-4 font-black text-black hover:bg-yellow-500 uppercase text-xs tracking-widest shadow-lg transition-all font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black font-black">更新雲端圖鑑</button>
                                 </div>
                             </div>
                         </div>
